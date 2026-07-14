@@ -41,6 +41,7 @@ function estadoInicial() {
     emprestimos: [],
     investimentos: [],
     metas: [],
+    notas: [], // notas fiscais do mercado
     orcamentos: {}, // { 'Mercado': 900, ... }
     proximoId: 100,
   };
@@ -55,7 +56,11 @@ let tipoLanc = 'saida';
 function carregar() {
   try {
     const bruto = localStorage.getItem(CHAVE);
-    if (bruto) return JSON.parse(bruto);
+    if (bruto) {
+      const d = JSON.parse(bruto);
+      if (!d.notas) d.notas = []; // migração de versões antigas
+      return d;
+    }
   } catch (e) { /* dados corrompidos: recomeça */ }
   return estadoInicial();
 }
@@ -158,7 +163,7 @@ function preencherSelects() {
   // Perfis
   const selFP = $('#filtro-perfil');
   selFP.querySelectorAll('option:not([value="todos"])').forEach((o) => o.remove());
-  const donos = [$('#lc-perfil'), $('#ct-dono'), $('#ep-dono'), $('#iv-dono')];
+  const donos = [$('#lc-perfil'), $('#ct-dono'), $('#ep-dono'), $('#iv-dono'), $('#nf-perfil')];
   donos.forEach((s) => (s.innerHTML = ''));
   const selMeta = $('#mt-dono');
   selMeta.querySelectorAll('option:not([value="casal"])').forEach((o) => o.remove());
@@ -755,6 +760,325 @@ function configurarForms() {
   });
 }
 
+// ==========================================================
+// MERCADO — nota fiscal com leitura de imagem (OCR)
+// ==========================================================
+const CATS_PRODUTO = {
+  '🥩 Carnes': ['CARNE', 'BOVIN', 'SUIN', 'FRANGO', 'FGO', 'AVE', 'PEITO', 'COXA', 'ASA', 'LINGUICA', 'SALSICHA', 'PICANHA', 'ALCATRA', 'PATINHO', 'ACEM', 'COSTELA', 'BACON', 'PEIXE', 'TILAPIA', 'SARDINHA', 'ATUM', 'MOIDA', 'BISTECA', 'FILE', 'HAMBURG', 'ALMONDEGA', 'CHURRASCO'],
+  '🧹 Limpeza': ['DETERG', 'SABAO', 'SAB PO', 'AMACIANTE', 'DESINF', 'AGUA SANIT', 'CANDIDA', 'ALVEJANTE', 'ESPONJA', 'BUCHA', 'VASSOURA', 'RODO', 'PANO', 'LIMPADOR', 'MULTIUSO', 'LUSTRA', 'SAPOLIO', 'CLORO', 'INSETICIDA', 'SACO LIXO', 'DESENGORD', 'LIMPA'],
+  '🍬 Guloseimas': ['CHOCOLATE', 'CHOC ', 'BALA', 'BOMBOM', 'PIRULITO', 'CHICLETE', 'BISCOITO', 'BISC ', 'BOLACHA', 'WAFER', 'DOCE', 'SORVETE', 'PICOLE', 'GELATINA', 'PACOCA', 'GOMA', 'SALGADINHO', 'CHIPS', 'PIPOCA', 'AMENDOIM', 'BROWNIE', 'TORTA', 'RECHEADO'],
+  '🥦 Hortifruti': ['BANANA', 'MACA', 'LARANJA', 'LIMAO', 'MAMAO', 'MELANCIA', 'ABACAXI', 'UVA', 'MORANGO', 'PERA', 'MANGA', 'TOMATE', 'ALFACE', 'CEBOLA', 'ALHO', 'BATATA', 'CENOURA', 'ABOBORA', 'ABOBRINHA', 'CHUCHU', 'REPOLHO', 'COUVE', 'BROCOLIS', 'PIMENTAO', 'PEPINO', 'BETERRABA', 'MANDIOCA', 'AIPIM', 'VERDURA', 'LEGUME', 'FRUTA', 'SALSA', 'COENTRO', 'RUCULA'],
+  '🥛 Laticínios e frios': ['LEITE', 'QUEIJO', 'QJO', 'MUSSARELA', 'PRATO', 'IOGURTE', 'IOG ', 'MANTEIGA', 'MARGARINA', 'REQUEIJAO', 'CREME DE LEITE', 'LEITE COND', 'NATA', 'PRESUNTO', 'MORTADELA', 'SALAME', 'PEITO PERU', 'RICOTA', 'COALHADA', 'OVO'],
+  '🍞 Padaria': ['PAO', 'BAGUETE', 'BISNAGA', 'BOLO', 'ROSCA', 'CROISSANT', 'TORRADA', 'SONHO', 'CUCA', 'SALGADO', 'PASTEL', 'PIZZA'],
+  '🥤 Bebidas': ['REFRIG', 'COCA', 'GUARANA', 'PEPSI', 'FANTA', 'SPRITE', 'SUCO', 'NECTAR', 'AGUA MIN', 'AGUA C GAS', 'CERVEJA', 'CERV ', 'SKOL', 'BRAHMA', 'HEINEKEN', 'VINHO', 'CACHACA', 'VODKA', 'WHISKY', 'ENERGETICO', 'CHA ', 'CAFE PRONTO', 'ISOTONICO', 'REFRESCO'],
+  '🍚 Mercearia': ['ARROZ', 'FEIJAO', 'OLEO', 'AZEITE', 'ACUCAR', 'SAL ', 'CAFE', 'MACARRAO', 'MASSA', 'FARINHA', 'TRIGO', 'FUBA', 'AVEIA', 'MILHO', 'ERVILHA', 'SELETA', 'MOLHO', 'EXTRATO', 'TEMPERO', 'CALDO', 'MAIONESE', 'KETCHUP', 'MOSTARDA', 'VINAGRE', 'ENLATADO', 'CONSERVA', 'SARDINHA LATA', 'GRANOLA', 'CEREAL', 'ACHOCOLATADO', 'NESCAU', 'TODDY', 'LEITE PO', 'MISTURA BOLO', 'FERMENTO', 'GELEIA', 'MEL '],
+  '🧴 Higiene': ['SHAMPOO', 'XAMPU', 'CONDICIONADOR', 'SABONETE', 'PAPEL HIG', 'CREME DENTAL', 'PASTA DENT', 'ESCOVA DENT', 'FIO DENTAL', 'DESODORANTE', 'ABSORVENTE', 'FRALDA', 'LENCO', 'ALGODAO', 'COTONETE', 'BARBEAD', 'HIDRATANTE', 'PROTETOR SOLAR'],
+  '🐾 Pet e outros': ['RACAO', 'PETISCO', 'AREIA GATO', 'PET '],
+};
+const NOMES_CATS_PRODUTO = [...Object.keys(CATS_PRODUTO), '📦 Outros'];
+
+function normalizarTexto(t) {
+  return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+}
+function categorizarProduto(nome) {
+  const n = ' ' + normalizarTexto(nome) + ' ';
+  for (const [cat, chaves] of Object.entries(CATS_PRODUTO)) {
+    if (chaves.some((c) => n.includes(c.length > 4 ? c : ' ' + c))) return cat;
+  }
+  return '📦 Outros';
+}
+
+// --- Interpretação do texto do cupom fiscal ---
+function interpretarCupom(texto) {
+  const itens = [];
+  const ignorar = /CNPJ|CPF|CUPOM|FISCAL|EXTRATO|CAIXA|OPERADOR|ICMS|IMPOSTO|TRIBUT|FORMA|PAGAMENTO|PAGTO|DINHEIRO|CARTAO|CREDITO|DEBITO|PIX|TROCO|DESCONTO|SUBTOTAL|QTD|TOTAL DE ITENS|VOLUMES|OBRIGADO|VOLTE SEMPRE|SAT |NFC|CONSUMIDOR|ENDERECO|RUA |AV |FONE|TEL|DATA|HORA|DOC|COO|LOJA|PDV|VENDA|www|HTTP/i;
+  const regPreco = /(\d{1,4}[.,]\d{2})\s*[A-Z]?\s*$/;
+  let total = 0;
+  for (let linha of texto.split('\n')) {
+    linha = linha.replace(/\s+/g, ' ').trim();
+    if (linha.length < 4) continue;
+    const mTotal = linha.match(/^TOTAL\b.*?(\d{1,5}[.,]\d{2})/i);
+    if (mTotal) { total = parseFloat(mTotal[1].replace(',', '.')); continue; }
+    if (ignorar.test(linha)) continue;
+    const m = linha.match(regPreco);
+    if (!m) continue;
+    const valor = parseFloat(m[1].replace(',', '.'));
+    if (!(valor > 0) || valor > 9999) continue;
+    let nome = linha.slice(0, m.index)
+      .replace(/\b\d{7,14}\b/g, ' ')            // código de barras
+      .replace(/^\s*\d{1,3}[\s.)-]+/, ' ')       // número do item
+      .replace(/\b\d+([.,]\d+)?\s*(UN|KG|LT|L|PC|CX|G|ML)\b/gi, ' ')
+      .replace(/\bX\s*\d+[.,]\d{2}\b/gi, ' ')    // "x 3,49"
+      .replace(/[|_*#=~]+/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+    if (nome.replace(/[^A-Za-zÀ-ú]/g, '').length < 3) continue;
+    itens.push({ nome, valor, cat: categorizarProduto(nome) });
+  }
+  return { itens, total };
+}
+
+// --- Carregamento do Tesseract.js (OCR) sob demanda ---
+let tesseractPronto = null;
+function carregarTesseract() {
+  if (!tesseractPronto) {
+    tesseractPronto = new Promise((resolver, falhar) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+      s.onload = () => resolver(window.Tesseract);
+      s.onerror = () => { tesseractPronto = null; falhar(new Error('Sem conexão para baixar o leitor de imagem.')); };
+      document.head.appendChild(s);
+    });
+  }
+  return tesseractPronto;
+}
+
+function redimensionar(img, maxLado, qualidade) {
+  const escala = Math.min(1, maxLado / Math.max(img.width, img.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(img.width * escala);
+  cv.height = Math.round(img.height * escala);
+  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+  return cv.toDataURL('image/jpeg', qualidade);
+}
+
+let notaEmRevisao = null; // { itens, img, totalLido }
+
+async function processarFoto(arquivo) {
+  const status = $('#ocr-status'), barra = $('#ocr-progresso'), txt = $('#ocr-texto');
+  status.classList.remove('oculto');
+  barra.style.width = '5%';
+  txt.textContent = 'Abrindo a imagem...';
+  try {
+    const url = URL.createObjectURL(arquivo);
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i); i.onerror = rej; i.src = url;
+    });
+    const imgOcr = redimensionar(img, 1800, 0.9);   // maior = melhor leitura
+    const imgMini = redimensionar(img, 480, 0.6);   // miniatura para guardar
+    URL.revokeObjectURL(url);
+
+    txt.textContent = 'Baixando o leitor (só na primeira vez)...';
+    const Tesseract = await carregarTesseract();
+    txt.textContent = 'Lendo a nota fiscal... 🔎';
+    const resultado = await Tesseract.recognize(imgOcr, 'por', {
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          barra.style.width = Math.round(10 + m.progress * 88) + '%';
+          txt.textContent = `Lendo a nota fiscal... ${Math.round(m.progress * 100)}%`;
+        }
+      },
+    });
+    barra.style.width = '100%';
+    const { itens, total } = interpretarCupom(resultado.data.text);
+    status.classList.add('oculto');
+    if (!itens.length) {
+      alert('Não consegui identificar itens nessa foto. 😕\nDica: tire a foto de frente, com boa luz e a nota esticada.\nVocê também pode digitar os itens manualmente.');
+      abrirRevisao([{ nome: '', valor: 0, cat: '📦 Outros' }], imgMini, 0);
+      return;
+    }
+    abrirRevisao(itens, imgMini, total);
+  } catch (erro) {
+    status.classList.add('oculto');
+    alert('Não foi possível ler a imagem: ' + erro.message);
+  }
+}
+
+function abrirRevisao(itens, img, totalLido) {
+  notaEmRevisao = { itens, img, totalLido };
+  $('#revisao-nota').classList.remove('oculto');
+  $('#nf-data').value = new Date().toISOString().slice(0, 10);
+  if (perfilAtivo) $('#nf-perfil').value = perfilAtivo;
+  const prev = $('#nf-preview');
+  if (img) { prev.src = img; prev.classList.remove('oculto'); }
+  else prev.classList.add('oculto');
+  renderRevisao();
+  $('#revisao-nota').scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderRevisao() {
+  const corpo = $('#tabela-revisao tbody');
+  corpo.innerHTML = notaEmRevisao.itens.map((it, i) => `
+    <tr>
+      <td><input value="${escapar(it.nome)}" data-i="${i}" data-campo="nome" placeholder="Nome do item"></td>
+      <td><select data-i="${i}" data-campo="cat">
+        ${NOMES_CATS_PRODUTO.map((c) => `<option ${c === it.cat ? 'selected' : ''}>${c}</option>`).join('')}
+      </select></td>
+      <td class="dir"><input class="inp-valor" type="number" step="0.01" min="0" value="${it.valor || ''}" data-i="${i}" data-campo="valor"></td>
+      <td><button class="btn-lixo" data-i="${i}" title="Remover item">✕</button></td>
+    </tr>`).join('');
+
+  corpo.querySelectorAll('input, select').forEach((el) => el.addEventListener('change', () => {
+    const it = notaEmRevisao.itens[+el.dataset.i];
+    it[el.dataset.campo] = el.dataset.campo === 'valor' ? (parseFloat(el.value) || 0) : el.value;
+    if (el.dataset.campo === 'nome') { it.cat = categorizarProduto(el.value); renderRevisao(); return; }
+    atualizarTotalRevisao();
+  }));
+  corpo.querySelectorAll('.btn-lixo').forEach((b) => b.addEventListener('click', () => {
+    notaEmRevisao.itens.splice(+b.dataset.i, 1);
+    renderRevisao();
+  }));
+  atualizarTotalRevisao();
+}
+function atualizarTotalRevisao() {
+  const soma = notaEmRevisao.itens.reduce((s, it) => s + (it.valor || 0), 0);
+  const dif = notaEmRevisao.totalLido && Math.abs(soma - notaEmRevisao.totalLido) > 0.02
+    ? ` (total impresso na nota: ${fmtBRL(notaEmRevisao.totalLido)})` : '';
+  $('#nf-total').textContent = 'Total: ' + fmtBRL(soma) + dif;
+}
+
+function salvarNota() {
+  const itens = notaEmRevisao.itens.filter((it) => it.nome.trim() && it.valor > 0);
+  if (!itens.length) { alert('Adicione pelo menos um item com nome e valor.'); return; }
+  const total = itens.reduce((s, it) => s + it.valor, 0);
+  const data = $('#nf-data').value || new Date().toISOString().slice(0, 10);
+  const mercado = $('#nf-mercado').value.trim() || 'Mercado';
+  const perfil = $('#nf-perfil').value;
+  const lancId = novoId();
+  dados.lancamentos.push({
+    id: lancId, tipo: 'saida', desc: '🛒 ' + mercado, cat: 'Mercado',
+    valor: +total.toFixed(2), data, perfil, pag: 'Nota do mercado',
+  });
+  dados.notas.push({ id: novoId(), data, mercado, perfil, total: +total.toFixed(2), img: notaEmRevisao.img, itens, lancId });
+  try {
+    salvar();
+  } catch (e) {
+    // localStorage cheio: guarda a nota sem a foto
+    dados.notas[dados.notas.length - 1].img = null;
+    salvar();
+    alert('O armazenamento do navegador encheu, então a nota foi salva sem a foto (os itens foram mantidos).');
+  }
+  fecharRevisao();
+  renderTudo();
+  document.querySelector('[data-aba="mercado"]').click();
+}
+function fecharRevisao() {
+  notaEmRevisao = null;
+  $('#revisao-nota').classList.add('oculto');
+  $('#nf-mercado').value = '';
+  $('#nf-arquivo').value = '';
+}
+
+// --- Renderização da aba Mercado ---
+function renderMercado() {
+  const notasMes = dados.notas.filter((n) =>
+    n.data.startsWith(mesRef) && (filtroPerfil === 'todos' || n.perfil === filtroPerfil));
+  $('#mercado-mes').textContent = rotuloMes(mesRef) +
+    (filtroPerfil === 'todos' ? ' · casal' : ' · ' + primeiroNome(filtroPerfil));
+
+  // Gráfico: gasto por categoria de produto
+  const alvo = $('#grafico-mercado');
+  const porCat = {};
+  notasMes.forEach((n) => n.itens.forEach((it) => { porCat[it.cat] = (porCat[it.cat] || 0) + it.valor; }));
+  const itensCat = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+  if (!itensCat.length) {
+    alvo.innerHTML = '<p class="vazio">Nenhuma nota neste mês. Anexe a primeira! 🧾</p>';
+  } else {
+    const totalMes = itensCat.reduce((s, [, v]) => s + v, 0);
+    const cores = coresSeries();
+    alvo.innerHTML = itensCat.map(([cat, v], i) => {
+      const pct = (v / totalMes) * 100;
+      return `
+        <div class="barra-cat cat-hover" data-cat="${escapar(cat)}" data-val="${v}" data-pct="${pct.toFixed(1)}">
+          <div class="prog-info"><span>${escapar(cat)}</span><span>${fmtBRL(v)} · <strong>${fmtPct(pct)}</strong></span></div>
+          <div class="progresso"><div style="width:${pct}%; background:${cores[i % 8]}"></div></div>
+        </div>`;
+    }).join('') + `<p class="dica" style="margin-top:8px">Total do mês em mercado: <strong>${fmtBRL(totalMes)}</strong></p>`;
+    alvo.querySelectorAll('.cat-hover').forEach((el) => {
+      el.addEventListener('mousemove', (ev) => mostrarTooltip(ev, `
+        <strong>${el.dataset.cat}</strong>
+        <div class="tt-linha">${fmtBRL(+el.dataset.val)} — ${el.dataset.pct.replace('.', ',')}% das compras do mês</div>
+        <div class="tt-linha">Clique para ver os itens</div>`));
+      el.addEventListener('mouseleave', esconderTooltip);
+      el.addEventListener('click', () => { esconderTooltip(); modalCategoriaProduto(el.dataset.cat, notasMes); });
+    });
+  }
+
+  // Lista de notas
+  const lista = $('#lista-notas');
+  const notasFiltro = dados.notas
+    .filter((n) => filtroPerfil === 'todos' || n.perfil === filtroPerfil)
+    .sort((a, b) => b.data.localeCompare(a.data));
+  lista.innerHTML = notasFiltro.length ? notasFiltro.map((n) => {
+    const cats = [...new Set(n.itens.map((it) => it.cat))].slice(0, 4);
+    return `
+      <div class="cartao cartao-item">
+        <button class="btn-lixo remover" data-id="${n.id}" title="Excluir nota">🗑</button>
+        <strong>🧾 ${escapar(n.mercado)}</strong><br>
+        <small>${fmtData(n.data)} · ${escapar(primeiroNome(n.perfil))} · ${n.itens.length} itens</small>
+        <div style="font-size:1.2rem; font-weight:700; margin-top:6px">${fmtBRL(n.total)}</div>
+        <div class="mini-cats">${cats.map((c) => `<span class="chip-cat">${escapar(c)}</span>`).join('')}</div>
+        ${n.img ? `<img class="nota-thumb" src="${n.img}" alt="Nota de ${escapar(n.mercado)}" data-id="${n.id}">` : ''}
+        <div class="linha-botoes" style="margin-top:10px">
+          <button class="btn-secundario ver-nota" data-id="${n.id}">👁 Ver itens</button>
+        </div>
+      </div>`;
+  }).join('') : '<p class="vazio cartao">Nenhuma nota salva ainda.</p>';
+
+  lista.querySelectorAll('.ver-nota').forEach((b) => b.addEventListener('click', () => modalNota(+b.dataset.id)));
+  lista.querySelectorAll('.nota-thumb').forEach((im) => im.addEventListener('click', () => {
+    const n = dados.notas.find((x) => x.id == im.dataset.id);
+    abrirModal('🧾 ' + n.mercado + ' — ' + fmtData(n.data), `<img class="img-modal" src="${n.img}" alt="Nota fiscal">`);
+  }));
+  lista.querySelectorAll('.remover').forEach((b) => b.addEventListener('click', () => {
+    if (confirm('Excluir esta nota? O lançamento correspondente em "Mercado" também será removido.')) {
+      const n = dados.notas.find((x) => x.id == b.dataset.id);
+      dados.notas = dados.notas.filter((x) => x.id != b.dataset.id);
+      if (n && n.lancId) dados.lancamentos = dados.lancamentos.filter((l) => l.id !== n.lancId);
+      salvar(); renderTudo();
+    }
+  }));
+}
+
+function modalNota(id) {
+  const n = dados.notas.find((x) => x.id === id);
+  if (!n) return;
+  const porCat = {};
+  n.itens.forEach((it) => { (porCat[it.cat] = porCat[it.cat] || []).push(it); });
+  const corpo = Object.entries(porCat).map(([cat, its]) => `
+    <p style="margin:10px 0 4px"><strong>${escapar(cat)}</strong> — ${fmtBRL(its.reduce((s, i) => s + i.valor, 0))}</p>
+    ${its.map((it) => `<div class="ultimo-item"><span>${escapar(it.nome)}</span><span>${fmtBRL(it.valor)}</span></div>`).join('')}`).join('');
+  abrirModal(`🧾 ${n.mercado} — ${fmtBRL(n.total)}`, corpo);
+}
+function modalCategoriaProduto(cat, notasMes) {
+  const its = [];
+  notasMes.forEach((n) => n.itens.forEach((it) => { if (it.cat === cat) its.push({ ...it, mercado: n.mercado, data: n.data }); }));
+  const corpo = its.sort((a, b) => b.valor - a.valor).map((it) => `
+    <div class="ultimo-item">
+      <div>${escapar(it.nome)}<div class="quem">${fmtData(it.data)} · ${escapar(it.mercado)}</div></div>
+      <strong>${fmtBRL(it.valor)}</strong>
+    </div>`).join('');
+  abrirModal(`${cat} — ${fmtBRL(its.reduce((s, i) => s + i.valor, 0))}`, corpo || '<p class="vazio">Nenhum item.</p>');
+}
+
+function configurarMercado() {
+  const arquivo = $('#nf-arquivo');
+  $('#btn-escolher-foto').addEventListener('click', () => arquivo.click());
+  arquivo.addEventListener('change', () => { if (arquivo.files[0]) processarFoto(arquivo.files[0]); });
+
+  const area = $('#upload-area');
+  area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('arrastando'); });
+  area.addEventListener('dragleave', () => area.classList.remove('arrastando'));
+  area.addEventListener('drop', (e) => {
+    e.preventDefault(); area.classList.remove('arrastando');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) processarFoto(f);
+  });
+
+  $('#btn-itens-manual').addEventListener('click', () =>
+    abrirRevisao([{ nome: '', valor: 0, cat: '📦 Outros' }], null, 0));
+  $('#btn-add-item').addEventListener('click', () => {
+    notaEmRevisao.itens.push({ nome: '', valor: 0, cat: '📦 Outros' });
+    renderRevisao();
+  });
+  $('#btn-salvar-nota').addEventListener('click', salvarNota);
+  $('#btn-cancelar-nota').addEventListener('click', fecharRevisao);
+  $('#nf-preview').addEventListener('click', () => {
+    if (notaEmRevisao && notaEmRevisao.img)
+      abrirModal('🧾 Foto da nota', `<img class="img-modal" src="${notaEmRevisao.img}" alt="Nota fiscal">`);
+  });
+}
+
 // ---------- Navegação por abas ----------
 function configurarAbas() {
   document.querySelectorAll('.aba').forEach((b) => b.addEventListener('click', () => {
@@ -772,6 +1096,7 @@ function renderTudo() {
   $('#filtro-mes').value = mesRef;
   renderDashboard();
   renderLancamentos();
+  renderMercado();
   renderCartoes();
   renderEmprestimos();
   renderInvestimentos();
@@ -801,6 +1126,7 @@ function iniciar() {
   configurarFormLancamento();
   configurarForms();
   configurarConfig();
+  configurarMercado();
 
   if (perfilAtivo && dados.perfis.some((p) => p.id === perfilAtivo)) entrar(perfilAtivo);
   else renderLogin();

@@ -7,6 +7,11 @@ Site completo de gestão financeira para o casal **Darci Brum** e **Jamylli Kaua
 - **Perfis separados** — cada um entra no seu perfil (com botão Sair) e pode cadastrar **mais de um e-mail**
 - **Lançamentos** de entradas e saídas por perfil, com categorias: mercado, pensão, aluguel, contas, transporte, saúde, educação, lazer, cartão de crédito, empréstimos, investimentos, planejamento e categorias personalizadas
 - **Dashboard** com cartões de resumo, gráfico de rosca por categoria (com porcentagens), gráfico de barras entradas × saídas dos últimos 6 meses e divisão de gastos por perfil — tudo com **tooltip ao passar o mouse** e **modal de detalhes ao clicar**
+- **🛒 Mercado com leitura de nota fiscal** — anexe a foto do cupom fiscal e o site lê os itens
+  automaticamente (OCR em português, direto no navegador) e separa por categoria de produto:
+  carnes, limpeza, guloseimas, hortifruti, laticínios, padaria, bebidas, mercearia, higiene e pet.
+  Tela de revisão para corrigir itens antes de salvar, gráfico de gastos por categoria de produto
+  e histórico de notas com a foto anexada
 - **Cartões de crédito** — limite, fechamento, vencimento e acompanhamento da fatura do mês
 - **Empréstimos** — parcelas pagas/restantes com barra de progresso
 - **Investimentos** — carteira do casal com divisão por titular

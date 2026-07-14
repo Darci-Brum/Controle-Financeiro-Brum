@@ -46,6 +46,7 @@
     <nav class="abas">
       <button class="aba ativa" data-aba="dashboard">📊 Dashboard</button>
       <button class="aba" data-aba="lancamentos">💸 Lançamentos</button>
+      <button class="aba" data-aba="mercado">🛒 Mercado</button>
       <button class="aba" data-aba="cartoes">💳 Cartões</button>
       <button class="aba" data-aba="emprestimos">🤝 Empréstimos</button>
       <button class="aba" data-aba="investimentos">📈 Investimentos</button>
@@ -110,6 +111,65 @@
             <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Perfil</th><th>Pagamento</th><th class="dir">Valor</th><th></th></tr></thead>
             <tbody></tbody>
           </table></div>
+        </div>
+      </section>
+
+      <!-- ===== MERCADO ===== -->
+      <section id="aba-mercado" class="painel">
+        <div class="cartao">
+          <h3>Anexar nota fiscal do mercado</h3>
+          <p class="dica">Envie a foto do cupom fiscal: o site lê os itens automaticamente e separa por categoria de produto
+            (limpeza, carnes, guloseimas, hortifruti, bebidas...). Depois é só revisar, corrigir o que precisar e salvar.
+            A leitura acontece no seu navegador — a foto não é enviada para nenhum servidor.</p>
+          <div class="upload-area" id="upload-area">
+            <input type="file" id="nf-arquivo" accept="image/*" class="oculto">
+            <div class="upload-icone">🧾</div>
+            <p>Arraste a foto da nota aqui, ou:</p>
+            <div class="linha-botoes centro">
+              <button id="btn-escolher-foto" class="btn-principal">📷 Escolher foto da nota</button>
+              <button id="btn-itens-manual" class="btn-secundario">✍️ Digitar itens manualmente</button>
+            </div>
+          </div>
+          <div id="ocr-status" class="ocr-status oculto">
+            <div class="progresso"><div id="ocr-progresso" style="width:0%"></div></div>
+            <p id="ocr-texto">Preparando leitura...</p>
+          </div>
+        </div>
+
+        <div class="cartao oculto" id="revisao-nota">
+          <h3>Revisar itens da nota <small>confira e corrija antes de salvar</small></h3>
+          <div class="formulario" style="margin-bottom:14px">
+            <div class="campo"><label>Mercado</label><input id="nf-mercado" placeholder="Ex.: Supermercado Central"></div>
+            <div class="campo"><label>Data da compra</label><input id="nf-data" type="date"></div>
+            <div class="campo"><label>Quem comprou</label><select id="nf-perfil"></select></div>
+          </div>
+          <div class="revisao-corpo">
+            <img id="nf-preview" class="nf-preview oculto" alt="Foto da nota fiscal">
+            <div class="tabela-scroll" style="flex:1">
+              <table class="tabela" id="tabela-revisao">
+                <thead><tr><th>Item</th><th>Categoria</th><th class="dir">Valor (R$)</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+              <button id="btn-add-item" class="btn-secundario" style="margin-top:10px">＋ Adicionar item</button>
+            </div>
+          </div>
+          <div class="revisao-rodape">
+            <strong id="nf-total">Total: R$ 0,00</strong>
+            <div class="linha-botoes">
+              <button id="btn-cancelar-nota" class="btn-secundario">Cancelar</button>
+              <button id="btn-salvar-nota" class="btn-principal">💾 Salvar nota como lançamento</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="cartao">
+          <h3>Compras por categoria de produto <small id="mercado-mes"></small></h3>
+          <div id="grafico-mercado"></div>
+        </div>
+
+        <div class="cartao">
+          <h3>Notas salvas</h3>
+          <div id="lista-notas" class="grade-cartoes"></div>
         </div>
       </section>
 
