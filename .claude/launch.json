@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "site",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8741", "--directory", "C:\\Users\\darci\\OneDrive\\Documentos\\GitHub\\Controle-Financeiro-Brum"],
+      "port": 8741
+    }
+  ]
+}
