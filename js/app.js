@@ -39,12 +39,62 @@ function estadoInicial() {
     ],
     cartoes: [],
     emprestimos: [],
+    crediarios: [],
     investimentos: [],
     metas: [],
     notas: [], // notas fiscais do mercado
+    cofre: { senha: null, movs: [] },
     orcamentos: {}, // { 'Mercado': 900, ... }
     proximoId: 100,
   };
+}
+
+// Exemplos (flag demo:true) para mostrar como fica na vida real —
+// removíveis em Configurações → Remover dados de exemplo.
+function adicionarExemplos(d) {
+  const hoje = new Date();
+  const dia = (n) => {
+    const dt = new Date(hoje.getFullYear(), hoje.getMonth(), Math.min(n, 28));
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  };
+  d.cartoes.push(
+    { id: 9101, demo: true, nome: 'Nubank', bandeira: 'Mastercard', limite: 2500, fecha: 28, vence: 5, dono: 'darci' },
+    { id: 9102, demo: true, nome: 'Itaú Click', bandeira: 'Visa', limite: 1800, fecha: 15, vence: 22, dono: 'jamylli' },
+    { id: 9103, demo: true, nome: 'Caixa Elo', bandeira: 'Elo', limite: 1200, fecha: 20, vence: 27, dono: 'darci' },
+  );
+  d.lancamentos.push(
+    { id: 9111, demo: true, tipo: 'saida', desc: 'Compras diversas', cat: 'Cartão de crédito', valor: 1400, data: dia(4), perfil: 'darci', pag: 'Cartão de crédito', cartaoId: 9101 },
+    { id: 9112, demo: true, tipo: 'saida', desc: 'Streaming e assinaturas', cat: 'Cartão de crédito', valor: 600, data: dia(9), perfil: 'darci', pag: 'Cartão de crédito', cartaoId: 9101 },
+    { id: 9113, demo: true, tipo: 'saida', desc: 'Roupas e presentes', cat: 'Cartão de crédito', valor: 900, data: dia(11), perfil: 'jamylli', pag: 'Cartão de crédito', cartaoId: 9102 },
+    { id: 9114, demo: true, tipo: 'saida', desc: 'Farmácia', cat: 'Saúde', valor: 180, data: dia(6), perfil: 'darci', pag: 'Cartão de crédito', cartaoId: 9103 },
+  );
+  d.emprestimos.push(
+    { id: 9121, demo: true, desc: 'Financiamento do carro', total: 24000, pago: 9600, dono: 'darci' },
+    { id: 9122, demo: true, desc: 'Empréstimo pessoal', total: 5000, pago: 3500, dono: 'jamylli' },
+    { id: 9123, demo: true, desc: 'Consignado', total: 8000, pago: 1200, dono: 'darci' },
+  );
+  d.crediarios.push(
+    { id: 9131, demo: true, desc: 'Geladeira — Casas Bahia', total: 3200, pago: 1600, dono: 'jamylli' },
+    { id: 9132, demo: true, desc: 'Celular — Magazine Luiza', total: 2400, pago: 800, dono: 'darci' },
+    { id: 9133, demo: true, desc: 'Óculos — Ótica Diniz', total: 900, pago: 300, dono: 'jamylli' },
+  );
+  d.investimentos.push(
+    { id: 9141, demo: true, desc: 'CDB Banco Inter', tipo: 'CDB / Renda fixa', valor: 5000, data: dia(2), dono: 'darci', pctCdi: 110 },
+    { id: 9142, demo: true, desc: 'LCI Caixa', tipo: 'CDB / Renda fixa', valor: 3000, data: dia(3), dono: 'jamylli', pctCdi: 95 },
+    { id: 9143, demo: true, desc: 'Tesouro Selic', tipo: 'Tesouro Direto', valor: 2000, data: dia(8), dono: 'darci', pctCdi: 100 },
+  );
+  d.metas.push(
+    { id: 9151, demo: true, nome: 'Viagem de férias', alvo: 6000, atual: 2500, prazo: `${hoje.getFullYear()}-12`, dono: 'casal' },
+    { id: 9152, demo: true, nome: 'Reserva de emergência', alvo: 15000, atual: 8200, prazo: '', dono: 'casal' },
+    { id: 9153, demo: true, nome: 'Notebook novo', alvo: 4500, atual: 1300, prazo: '', dono: 'darci' },
+  );
+  d.cofre.movs.push(
+    { id: 9161, demo: true, tipo: 'aplicar', valor: 1500, data: dia(3), desc: 'Aplicação inicial' },
+    { id: 9162, demo: true, tipo: 'aplicar', valor: 800, data: dia(10), desc: 'Sobra do mês' },
+    { id: 9163, demo: true, tipo: 'retirar', valor: 300, data: dia(12), desc: 'Emergência' },
+  );
+  d.proximoId = Math.max(d.proximoId || 100, 9200);
+  d.exemplosV2 = true;
 }
 
 let dados = carregar();
@@ -58,11 +108,20 @@ function carregar() {
     const bruto = localStorage.getItem(CHAVE);
     if (bruto) {
       const d = JSON.parse(bruto);
-      if (!d.notas) d.notas = []; // migração de versões antigas
+      // migrações de versões antigas
+      if (!d.notas) d.notas = [];
+      if (!d.crediarios) d.crediarios = [];
+      if (!d.cofre) d.cofre = { senha: null, movs: [] };
+      d.emprestimos.forEach((e) => {
+        if (e.pago === undefined) e.pago = e.parcelas ? +((e.total / e.parcelas) * (e.pagas || 0)).toFixed(2) : 0;
+      });
+      if (!d.exemplosV2) adicionarExemplos(d);
       return d;
     }
   } catch (e) { /* dados corrompidos: recomeça */ }
-  return estadoInicial();
+  const novo = estadoInicial();
+  adicionarExemplos(novo);
+  return novo;
 }
 function salvar() { localStorage.setItem(CHAVE, JSON.stringify(dados)); }
 function novoId() { return dados.proximoId++; }
@@ -163,7 +222,7 @@ function preencherSelects() {
   // Perfis
   const selFP = $('#filtro-perfil');
   selFP.querySelectorAll('option:not([value="todos"])').forEach((o) => o.remove());
-  const donos = [$('#lc-perfil'), $('#ct-dono'), $('#ep-dono'), $('#iv-dono'), $('#nf-perfil')];
+  const donos = [$('#lc-perfil'), $('#ct-dono'), $('#ep-dono'), $('#cr-dono'), $('#iv-dono'), $('#nf-perfil')];
   donos.forEach((s) => (s.innerHTML = ''));
   const selMeta = $('#mt-dono');
   selMeta.querySelectorAll('option:not([value="casal"])').forEach((o) => o.remove());
@@ -480,93 +539,286 @@ function configurarFormLancamento() {
 // ==========================================================
 // CARTÕES
 // ==========================================================
+// Cor conforme o limite RESTANTE: ≤25% vermelho, ≤40% amarelo, ≤70% laranja, acima verde
+function statusCartao(restantePct) {
+  if (restantePct <= 25) return { cls: 'st-vermelho', selo: '🔴 Limite crítico' };
+  if (restantePct <= 40) return { cls: 'st-amarelo', selo: '🟡 Atenção ao limite' };
+  if (restantePct <= 70) return { cls: 'st-laranja', selo: '🟠 Uso moderado' };
+  return { cls: 'st-verde', selo: '🟢 Limite tranquilo' };
+}
 function renderCartoes() {
   const alvo = $('#lista-cartoes');
-  if (!dados.cartoes.length) { alvo.innerHTML = '<p class="vazio cartao">Nenhum cartão cadastrado ainda. 💳</p>'; return; }
-  alvo.innerHTML = dados.cartoes.map((c) => {
+  if (!dados.cartoes.length) { alvo.innerHTML = '<p class="vazio cartao">Nenhum cartão cadastrado ainda. 💳</p>'; }
+  else alvo.innerHTML = dados.cartoes.map((c) => {
     const gasto = soma(lancDoMes(mesRef, 'todos').filter((l) => l.tipo === 'saida' && l.cartaoId == c.id));
     const pct = c.limite > 0 ? Math.min((gasto / c.limite) * 100, 100) : 0;
-    const cls = pct >= 100 ? 'estouro' : pct >= 75 ? 'alerta' : '';
+    const restantePct = 100 - pct;
+    const st = statusCartao(restantePct);
     return `
-      <div class="cartao cartao-item">
+      <div class="cartao cartao-item ${st.cls}">
         <button class="btn-lixo remover" data-id="${c.id}" data-tipo="cartao" title="Excluir">🗑</button>
         <div class="cartao-credito-topo">
           <strong>💳 ${escapar(c.nome)}</strong>
           <span class="bandeira">${escapar(c.bandeira)}</span>
         </div>
         <small>Titular: ${escapar(primeiroNome(c.dono))} · Fecha dia ${c.fecha} · Vence dia ${c.vence}</small>
-        <div class="progresso"><div class="${cls}" style="width:${pct}%"></div></div>
+        <div class="progresso"><div style="width:${pct}%"></div></div>
         <div class="prog-info">
           <span>Fatura de ${rotuloMes(mesRef)}: <strong>${fmtBRL(gasto)}</strong></span>
-          <span>Limite: ${fmtBRL(c.limite)} (${fmtPct(pct)})</span>
+          <span>Livre: <strong>${fmtBRL(Math.max(c.limite - gasto, 0))}</strong> (${fmtPct(restantePct)})</span>
         </div>
+        <span class="selo-status">${st.selo}</span>
       </div>`;
   }).join('');
   ligarRemocao(alvo, 'cartoes');
+  renderCalendario();
+}
+
+// --- Calendário de fechamento/vencimento das faturas ---
+function renderCalendario() {
+  const alvo = $('#calendario-cartoes');
+  const [ano, mes] = mesRef.split('-').map(Number);
+  $('#cal-mes').textContent = rotuloMes(mesRef);
+  const primeiroDiaSemana = new Date(ano, mes - 1, 1).getDay();
+  const totalDias = new Date(ano, mes, 0).getDate();
+  const hoje = new Date();
+  const ehMesAtual = hoje.getFullYear() === ano && hoje.getMonth() + 1 === mes;
+
+  let html = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    .map((d) => `<div class="cal-cab">${d}</div>`).join('');
+  for (let i = 0; i < primeiroDiaSemana; i++) html += '<div class="cal-dia vazio-cal"></div>';
+  for (let d = 1; d <= totalDias; d++) {
+    const eventos = [];
+    dados.cartoes.forEach((c) => {
+      if (Math.min(c.fecha, totalDias) === d) eventos.push(`<div class="cal-evento fecha" title="Fechamento da fatura ${escapar(c.nome)}">🔒 ${escapar(c.nome)}</div>`);
+      if (Math.min(c.vence, totalDias) === d) eventos.push(`<div class="cal-evento vence" title="Vencimento da fatura ${escapar(c.nome)}">💰 ${escapar(c.nome)}</div>`);
+    });
+    const ehHoje = ehMesAtual && hoje.getDate() === d;
+    html += `<div class="cal-dia ${ehHoje ? 'hoje' : ''}"><span class="num">${d}</span>${eventos.join('')}</div>`;
+  }
+  alvo.innerHTML = html;
+
+  // Avisos de fechamento próximo (até 5 dias)
+  const avisos = [];
+  const hoje0 = new Date(); hoje0.setHours(0, 0, 0, 0);
+  dados.cartoes.forEach((c) => {
+    const ultimoDia = (a, m) => new Date(a, m + 1, 0).getDate();
+    let fecha = new Date(hoje0.getFullYear(), hoje0.getMonth(), Math.min(c.fecha, ultimoDia(hoje0.getFullYear(), hoje0.getMonth())));
+    if (fecha < hoje0) fecha = new Date(hoje0.getFullYear(), hoje0.getMonth() + 1, Math.min(c.fecha, ultimoDia(hoje0.getFullYear(), hoje0.getMonth() + 1)));
+    const dias = Math.round((fecha - hoje0) / 86400000);
+    if (dias <= 5) avisos.push(`<span class="alerta-chip">⚠️ <strong>${escapar(c.nome)}</strong> fecha ${dias === 0 ? 'HOJE' : dias === 1 ? 'amanhã' : 'em ' + dias + ' dias'} (dia ${c.fecha})</span>`);
+  });
+  $('#alertas-cartoes').innerHTML = avisos.join('') ||
+    (dados.cartoes.length ? '<span class="dica">Nenhuma fatura fechando nos próximos 5 dias. 😌</span>' : '');
 }
 
 // ==========================================================
-// EMPRÉSTIMOS
+// EMPRÉSTIMOS E CONTAS/CREDIÁRIO (valor pago × restante)
 // ==========================================================
-function renderEmprestimos() {
-  const alvo = $('#lista-emprestimos');
-  if (!dados.emprestimos.length) { alvo.innerHTML = '<p class="vazio cartao">Nenhum empréstimo cadastrado. Que continue assim! 🎉</p>'; return; }
-  alvo.innerHTML = dados.emprestimos.map((e) => {
-    const parcela = e.total / e.parcelas;
-    const pct = (e.pagas / e.parcelas) * 100;
-    const restante = e.total - parcela * e.pagas;
-    return `
-      <div class="cartao cartao-item">
-        <button class="btn-lixo remover" data-id="${e.id}" title="Excluir">🗑</button>
-        <strong>🤝 ${escapar(e.desc)}</strong><br>
-        <small>Responsável: ${escapar(primeiroNome(e.dono))} · Parcela: ${fmtBRL(parcela)}</small>
-        <div class="progresso"><div style="width:${pct}%"></div></div>
-        <div class="prog-info">
-          <span>${e.pagas}/${e.parcelas} parcelas (${fmtPct(pct)})</span>
-          <span>Falta: <strong>${fmtBRL(restante)}</strong></span>
-        </div>
-        <div class="linha-botoes" style="margin-top:10px">
-          <button class="btn-secundario btn-pagar" data-id="${e.id}">✓ Pagar parcela</button>
-        </div>
-      </div>`;
-  }).join('');
-  ligarRemocao(alvo, 'emprestimos');
-  alvo.querySelectorAll('.btn-pagar').forEach((b) => b.addEventListener('click', () => {
-    const e = dados.emprestimos.find((x) => x.id == b.dataset.id);
-    if (e && e.pagas < e.parcelas) { e.pagas++; salvar(); renderTudo(); }
+function cartaoDivida(item, icone) {
+  const pct = item.total > 0 ? Math.min((item.pago / item.total) * 100, 100) : 0;
+  const restante = Math.max(item.total - item.pago, 0);
+  const quitado = restante <= 0.005;
+  return `
+    <div class="cartao cartao-item ${quitado ? 'st-verde' : ''}">
+      <button class="btn-lixo remover" data-id="${item.id}" title="Excluir">🗑</button>
+      <strong>${icone} ${escapar(item.desc)}</strong><br>
+      <small>Responsável: ${escapar(primeiroNome(item.dono))} · Total: ${fmtBRL(item.total)}</small>
+      <div class="progresso"><div style="width:${pct}%"></div></div>
+      <div class="prog-info">
+        <span>Pago: <strong class="val-pos">${fmtBRL(item.pago)}</strong> (${fmtPct(pct)})</span>
+        <span>Restante: <strong class="${quitado ? 'val-pos' : 'val-neg'}">${fmtBRL(restante)}</strong></span>
+      </div>
+      <div class="linha-botoes" style="margin-top:10px">
+        ${quitado ? '<span class="selo-status">✅ Quitado!</span>'
+          : `<button class="btn-secundario btn-pagamento" data-id="${item.id}">＋ Registrar pagamento</button>`}
+      </div>
+    </div>`;
+}
+function ligarPagamentos(container, colecao) {
+  container.querySelectorAll('.btn-pagamento').forEach((b) => b.addEventListener('click', () => {
+    const item = dados[colecao].find((x) => x.id == b.dataset.id);
+    const v = parseFloat((prompt(`Quanto foi pago de "${item.desc}"? (R$)`) || '').replace(',', '.'));
+    if (v > 0) {
+      item.pago = Math.min(+(item.pago + v).toFixed(2), item.total);
+      salvar(); renderTudo();
+    }
   }));
 }
+function renderEmprestimos() {
+  const alvo = $('#lista-emprestimos');
+  alvo.innerHTML = dados.emprestimos.length
+    ? dados.emprestimos.map((e) => cartaoDivida(e, '🤝')).join('')
+    : '<p class="vazio cartao">Nenhum empréstimo cadastrado. Que continue assim! 🎉</p>';
+  ligarRemocao(alvo, 'emprestimos');
+  ligarPagamentos(alvo, 'emprestimos');
+}
+function renderCrediarios() {
+  const alvo = $('#lista-crediarios');
+  alvo.innerHTML = dados.crediarios.length
+    ? dados.crediarios.map((c) => cartaoDivida(c, '🧾')).join('')
+    : '<p class="vazio cartao">Nenhuma conta ou crediário cadastrado.</p>';
+  ligarRemocao(alvo, 'crediarios');
+  ligarPagamentos(alvo, 'crediarios');
+}
 
 // ==========================================================
-// INVESTIMENTOS
+// INVESTIMENTOS (com % do CDI)
 // ==========================================================
+let cdiBuscado = null; // taxa % a.a. vinda do Banco Central
+
+function cdiAtual() {
+  const manual = parseFloat($('#cdi-valor').value);
+  return manual > 0 ? manual : cdiBuscado;
+}
+async function buscarCDI() {
+  const fonte = $('#cdi-fonte');
+  fonte.textContent = 'buscando no Banco Central...';
+  try {
+    // Série SGS 4389: Taxa DI anualizada (% a.a.) — API pública do Banco Central
+    const r = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados/ultimos/1?formato=json');
+    const j = await r.json();
+    cdiBuscado = parseFloat(j[0].valor);
+    fonte.textContent = `${cdiBuscado.toLocaleString('pt-BR')}% a.a. — Banco Central, ${j[0].data}`;
+    $('#cdi-valor').placeholder = String(cdiBuscado).replace('.', ',');
+  } catch (e) {
+    fonte.textContent = 'não foi possível buscar (sem internet?) — digite a taxa manualmente';
+  }
+  renderInvestimentos();
+}
+
+function rendimentoMes(inv) {
+  const cdi = cdiAtual();
+  if (!cdi || !inv.pctCdi) return null;
+  return inv.valor * (cdi / 100) * (inv.pctCdi / 100) / 12;
+}
+
 function renderInvestimentos() {
   const lista = dados.investimentos;
   const total = soma(lista);
+  const rendaMes = lista.reduce((s, i) => s + (rendimentoMes(i) || 0), 0);
   const porPerfil = dados.perfis.map((p) => ({ p, v: soma(lista.filter((i) => i.dono === p.id)) }));
   $('#resumo-invest').innerHTML = `
     <div class="card-resumo"><div class="rotulo">📈 Total do casal</div><div class="valor pos">${fmtBRL(total)}</div></div>
+    <div class="card-resumo"><div class="rotulo">💹 Rende ≈ por mês</div><div class="valor pos">${rendaMes > 0 ? fmtBRL(rendaMes) : '—'}</div>
+      <div class="extra">${rendaMes > 0 ? 'estimativa com o CDI atual' : 'informe o CDI e o % de cada investimento'}</div></div>
     ${porPerfil.map(({ p, v }) => `
       <div class="card-resumo"><div class="rotulo"><span style="color:${p.cor}">●</span> ${escapar(primeiroNome(p.id))}</div>
       <div class="valor">${fmtBRL(v)}</div>
       <div class="extra">${total > 0 ? fmtPct((v / total) * 100) + ' da carteira' : '—'}</div></div>`).join('')}`;
 
   const corpo = $('#tabela-invest tbody');
-  corpo.innerHTML = lista.slice().sort((a, b) => b.data.localeCompare(a.data)).map((i) => `
+  corpo.innerHTML = lista.slice().sort((a, b) => b.data.localeCompare(a.data)).map((i) => {
+    const rm = rendimentoMes(i);
+    return `
     <tr>
       <td>${fmtData(i.data)}</td>
       <td>${escapar(i.desc)}</td>
       <td><span class="chip-cat">${escapar(i.tipo)}</span></td>
       <td>${escapar(primeiroNome(i.dono))}</td>
+      <td class="dir">${i.pctCdi ? i.pctCdi.toLocaleString('pt-BR') + '%' : '—'}</td>
+      <td class="dir val-pos">${rm ? fmtBRL(rm) : '—'}</td>
       <td class="dir val-pos">${fmtBRL(i.valor)}</td>
       <td><button class="btn-lixo" data-id="${i.id}" title="Excluir">🗑</button></td>
-    </tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum investimento ainda. Comece hoje! 🌱</td></tr>';
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" class="vazio">Nenhum investimento ainda. Comece hoje! 🌱</td></tr>';
   corpo.querySelectorAll('.btn-lixo').forEach((b) => b.addEventListener('click', () => {
     if (confirm('Excluir este investimento?')) {
       dados.investimentos = dados.investimentos.filter((i) => i.id != b.dataset.id);
       salvar(); renderTudo();
     }
   }));
+}
+
+// ==========================================================
+// COFRE DO CASAL (valores ocultos por senha)
+// ==========================================================
+let cofreLiberado = false;
+
+async function hashSenha(texto) {
+  if (crypto && crypto.subtle) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('cfbrum:' + texto));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  // fallback simples caso o navegador não tenha crypto.subtle
+  let h = 5381;
+  for (const ch of 'cfbrum:' + texto) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0;
+  return 'x' + h.toString(16);
+}
+async function criarSenhaCofre() {
+  const s1 = prompt('Crie uma senha para o cofre (você vai usá-la para ver e retirar valores):');
+  if (!s1) return false;
+  const s2 = prompt('Digite a senha de novo para confirmar:');
+  if (s1 !== s2) { alert('As senhas não conferem. Tente de novo.'); return false; }
+  dados.cofre.senha = await hashSenha(s1);
+  salvar();
+  cofreLiberado = true;
+  alert('Senha criada! 🔒 Guarde-a bem: sem ela não dá para ver os valores.');
+  return true;
+}
+async function pedirSenhaCofre() {
+  if (cofreLiberado) return true;
+  if (!dados.cofre.senha) return criarSenhaCofre();
+  const s = prompt('Digite a senha do cofre:');
+  if (s === null) return false;
+  if (await hashSenha(s) === dados.cofre.senha) { cofreLiberado = true; return true; }
+  alert('Senha incorreta. ❌');
+  return false;
+}
+function saldoCofre() {
+  return dados.cofre.movs.reduce((s, m) => s + (m.tipo === 'aplicar' ? m.valor : -m.valor), 0);
+}
+function renderCofre() {
+  const mask = 'R$ ••••••';
+  $('#cofre-total').textContent = cofreLiberado ? fmtBRL(saldoCofre()) : mask;
+  $('#cofre-info').textContent = dados.cofre.movs.length
+    ? `${dados.cofre.movs.length} movimentações` + (dados.cofre.senha ? '' : ' · senha ainda não criada')
+    : 'nenhuma movimentação ainda';
+  $('#btn-cofre-ver').textContent = cofreLiberado ? '🙈 Ocultar valores' : '👁 Mostrar valores';
+  const movs = [...dados.cofre.movs].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 10);
+  $('#cofre-movs').innerHTML = movs.map((m) => `
+    <div class="ultimo-item">
+      <div>${m.tipo === 'aplicar' ? '⬆ Aplicação' : '⬇ Retirada'}${m.desc ? ' — ' + escapar(m.desc) : ''}
+        <div class="quem">${fmtData(m.data)}</div></div>
+      <strong class="${m.tipo === 'aplicar' ? 'val-pos' : 'val-neg'} ${cofreLiberado ? '' : 'mov-mask'}">
+        ${cofreLiberado ? (m.tipo === 'aplicar' ? '+ ' : '− ') + fmtBRL(m.valor) : '••••'}</strong>
+    </div>`).join('');
+}
+function configurarCofre() {
+  $('#btn-cofre-ver').addEventListener('click', async () => {
+    if (cofreLiberado) cofreLiberado = false;
+    else if (!(await pedirSenhaCofre())) return;
+    renderCofre();
+  });
+  $('#btn-cofre-aplicar').addEventListener('click', async () => {
+    if (!dados.cofre.senha && !(await criarSenhaCofre())) return;
+    const v = parseFloat((prompt('Quanto deseja aplicar no cofre? (R$)') || '').replace(',', '.'));
+    if (!(v > 0)) return;
+    const desc = prompt('Descrição (opcional):') || '';
+    dados.cofre.movs.push({ id: novoId(), tipo: 'aplicar', valor: v, data: new Date().toISOString().slice(0, 10), desc });
+    salvar(); renderCofre();
+  });
+  $('#btn-cofre-retirar').addEventListener('click', async () => {
+    if (!(await pedirSenhaCofre())) return;
+    const v = parseFloat((prompt('Quanto deseja retirar do cofre? (R$)') || '').replace(',', '.'));
+    if (!(v > 0)) return;
+    if (v > saldoCofre()) { alert('O cofre não tem tudo isso! Saldo atual: ' + fmtBRL(saldoCofre())); return; }
+    const desc = prompt('Motivo da retirada (opcional):') || '';
+    dados.cofre.movs.push({ id: novoId(), tipo: 'retirar', valor: v, data: new Date().toISOString().slice(0, 10), desc });
+    salvar(); renderCofre(); // o total é recalculado automaticamente
+  });
+}
+
+// ==========================================================
+// MODO TV (tela cheia para apresentação)
+// ==========================================================
+function alternarTV() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else {
+    document.querySelector('[data-aba="dashboard"]').click();
+    (document.documentElement.requestFullscreen ? document.documentElement.requestFullscreen() : Promise.reject())
+      .catch(() => document.body.classList.add('modo-tv'));
+  }
 }
 
 // ==========================================================
@@ -692,7 +944,9 @@ function configurarConfig() {
     URL.revokeObjectURL(a.href);
   });
   $('#btn-limpar-demo').addEventListener('click', () => {
-    dados.lancamentos = dados.lancamentos.filter((l) => !l.demo);
+    ['lancamentos', 'cartoes', 'emprestimos', 'crediarios', 'investimentos', 'metas', 'notas']
+      .forEach((col) => { dados[col] = dados[col].filter((x) => !x.demo); });
+    dados.cofre.movs = dados.cofre.movs.filter((m) => !m.demo);
     salvar(); renderTudo();
   });
   $('#btn-zerar').addEventListener('click', () => {
@@ -731,12 +985,24 @@ function configurarForms() {
 
   $('#form-emprestimo').addEventListener('submit', (e) => {
     e.preventDefault();
+    const total = parseFloat($('#ep-total').value);
     dados.emprestimos.push({
-      id: novoId(), desc: $('#ep-desc').value.trim(), total: parseFloat($('#ep-total').value),
-      parcelas: +$('#ep-parcelas').value, pagas: Math.min(+$('#ep-pagas').value, +$('#ep-parcelas').value),
+      id: novoId(), desc: $('#ep-desc').value.trim(), total,
+      pago: Math.min(parseFloat($('#ep-pago').value) || 0, total),
       dono: $('#ep-dono').value,
     });
     salvar(); $('#form-emprestimo').reset(); renderTudo();
+  });
+
+  $('#form-crediario').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const total = parseFloat($('#cr-total').value);
+    dados.crediarios.push({
+      id: novoId(), desc: $('#cr-desc').value.trim(), total,
+      pago: Math.min(parseFloat($('#cr-pago').value) || 0, total),
+      dono: $('#cr-dono').value,
+    });
+    salvar(); $('#form-crediario').reset(); renderTudo();
   });
 
   $('#form-investimento').addEventListener('submit', (e) => {
@@ -744,6 +1010,7 @@ function configurarForms() {
     dados.investimentos.push({
       id: novoId(), desc: $('#iv-desc').value.trim(), tipo: $('#iv-tipo').value,
       valor: parseFloat($('#iv-valor').value), data: $('#iv-data').value, dono: $('#iv-dono').value,
+      pctCdi: parseFloat($('#iv-cdi').value) || null,
     });
     salvar(); $('#form-investimento').reset();
     $('#iv-data').value = new Date().toISOString().slice(0, 10);
@@ -1099,7 +1366,9 @@ function renderTudo() {
   renderMercado();
   renderCartoes();
   renderEmprestimos();
+  renderCrediarios();
   renderInvestimentos();
+  renderCofre();
   renderMetas();
   renderOrcamentos();
   renderConfig();
@@ -1127,6 +1396,18 @@ function iniciar() {
   configurarForms();
   configurarConfig();
   configurarMercado();
+  configurarCofre();
+
+  // Modo TV
+  $('#btn-tv').addEventListener('click', alternarTV);
+  document.addEventListener('fullscreenchange', () => {
+    document.body.classList.toggle('modo-tv', !!document.fullscreenElement);
+  });
+
+  // CDI
+  $('#btn-cdi-buscar').addEventListener('click', buscarCDI);
+  $('#cdi-valor').addEventListener('change', renderInvestimentos);
+  buscarCDI();
 
   if (perfilAtivo && dados.perfis.some((p) => p.id === perfilAtivo)) entrar(perfilAtivo);
   else renderLogin();

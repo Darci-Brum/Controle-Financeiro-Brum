@@ -37,6 +37,7 @@
         <select id="filtro-perfil" class="seletor-mes" title="Filtrar por perfil">
           <option value="todos">👫 Casal (tudo)</option>
         </select>
+        <button id="btn-tv" class="btn-icone" title="Modo TV — tela cheia para apresentação">📺</button>
         <button id="btn-tema" class="btn-icone" title="Alternar tema claro/escuro">🌙</button>
         <button id="btn-sair" class="btn-sair" title="Sair do perfil">Sair ⏻</button>
       </div>
@@ -188,8 +189,17 @@
             <div class="campo"><label>Titular</label><select id="ct-dono"></select></div>
             <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar cartão</button></div>
           </form>
+          <p class="dica" style="margin-top:12px">Cor do cartão conforme o <strong>limite restante</strong>:
+            🔴 até 25% restante · 🟡 até 40% · 🟠 até 70% · 🟢 acima de 70% livre</p>
         </div>
         <div id="lista-cartoes" class="grade-cartoes"></div>
+
+        <div class="cartao">
+          <h3>📅 Calendário de faturas <small id="cal-mes"></small></h3>
+          <div id="alertas-cartoes" class="alertas-cartoes"></div>
+          <div id="calendario-cartoes" class="calendario"></div>
+          <p class="dica" style="margin-top:10px">🔒 = fechamento da fatura · 💰 = vencimento · o dia de hoje fica destacado</p>
+        </div>
       </section>
 
       <!-- ===== EMPRÉSTIMOS ===== -->
@@ -199,13 +209,25 @@
           <form id="form-emprestimo" class="formulario">
             <div class="campo"><label>Descrição</label><input id="ep-desc" required placeholder="Ex.: Financiamento do carro"></div>
             <div class="campo"><label>Valor total (R$)</label><input id="ep-total" type="number" step="0.01" min="0.01" required></div>
-            <div class="campo"><label>Nº de parcelas</label><input id="ep-parcelas" type="number" min="1" required></div>
-            <div class="campo"><label>Parcelas pagas</label><input id="ep-pagas" type="number" min="0" value="0" required></div>
+            <div class="campo"><label>Valor já pago (R$)</label><input id="ep-pago" type="number" step="0.01" min="0" value="0" required></div>
             <div class="campo"><label>Responsável</label><select id="ep-dono"></select></div>
             <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar</button></div>
           </form>
         </div>
         <div id="lista-emprestimos" class="grade-cartoes"></div>
+
+        <div class="cartao">
+          <h3>Nova conta / crediário</h3>
+          <p class="dica">Carnês, crediários de loja, contas parceladas... registre o valor total e vá somando o que já foi pago.</p>
+          <form id="form-crediario" class="formulario">
+            <div class="campo"><label>Descrição / loja</label><input id="cr-desc" required placeholder="Ex.: Geladeira — Casas Bahia"></div>
+            <div class="campo"><label>Valor total (R$)</label><input id="cr-total" type="number" step="0.01" min="0.01" required></div>
+            <div class="campo"><label>Valor já pago (R$)</label><input id="cr-pago" type="number" step="0.01" min="0" value="0" required></div>
+            <div class="campo"><label>Responsável</label><select id="cr-dono"></select></div>
+            <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar</button></div>
+          </form>
+        </div>
+        <div id="lista-crediarios" class="grade-cartoes"></div>
       </section>
 
       <!-- ===== INVESTIMENTOS ===== -->
@@ -218,16 +240,26 @@
               <select id="iv-tipo"><option>Poupança</option><option>CDB / Renda fixa</option><option>Tesouro Direto</option><option>Ações</option><option>Fundos</option><option>FIIs</option><option>Cripto</option><option>Outro</option></select>
             </div>
             <div class="campo"><label>Valor aplicado (R$)</label><input id="iv-valor" type="number" step="0.01" min="0.01" required></div>
+            <div class="campo"><label>% do CDI <small>(do app do banco)</small></label><input id="iv-cdi" type="number" step="0.1" min="0" placeholder="ex.: 110"></div>
             <div class="campo"><label>Data</label><input id="iv-data" type="date" required></div>
             <div class="campo"><label>Titular</label><select id="iv-dono"></select></div>
             <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar</button></div>
           </form>
         </div>
+        <div class="cartao">
+          <h3>📊 CDI hoje <small id="cdi-fonte">buscando no Banco Central...</small></h3>
+          <div class="formulario">
+            <div class="campo"><label>CDI (% ao ano)</label><input id="cdi-valor" type="number" step="0.01" min="0" placeholder="ex.: 12,15"></div>
+            <div class="campo campo-botao"><button id="btn-cdi-buscar" class="btn-secundario" type="button">🔄 Buscar do Banco Central</button></div>
+          </div>
+          <p class="dica">A taxa é buscada automaticamente do Banco Central. Se preferir, digite a taxa que aparece no
+            app do seu banco — o valor digitado tem prioridade. Com ela, o site estima quanto cada investimento rende por mês.</p>
+        </div>
         <div id="resumo-invest" class="cards-resumo"></div>
         <div class="cartao">
           <h3>Carteira</h3>
           <div class="tabela-scroll"><table class="tabela" id="tabela-invest">
-            <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Titular</th><th class="dir">Valor</th><th></th></tr></thead>
+            <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Titular</th><th class="dir">% CDI</th><th class="dir">Rende ≈/mês</th><th class="dir">Valor</th><th></th></tr></thead>
             <tbody></tbody>
           </table></div>
         </div>
@@ -235,6 +267,24 @@
 
       <!-- ===== PLANEJAMENTO ===== -->
       <section id="aba-planejamento" class="painel">
+        <div class="cartao">
+          <h3>🔒 Cofre do casal <small>valores protegidos por senha</small></h3>
+          <p class="dica">Guarde dinheiro aqui e acompanhe o total sem mostrar os números na tela — os valores só aparecem
+            depois de digitar a senha, que você cria na primeira aplicação. Ao retirar, o total é recalculado automaticamente.</p>
+          <div class="cards-resumo">
+            <div class="card-resumo">
+              <div class="rotulo">💰 Total guardado</div>
+              <div class="valor" id="cofre-total">R$ ••••••</div>
+              <div class="extra" id="cofre-info"></div>
+            </div>
+          </div>
+          <div class="linha-botoes" style="margin-top:14px">
+            <button id="btn-cofre-ver" class="btn-secundario">👁 Mostrar valores</button>
+            <button id="btn-cofre-aplicar" class="btn-principal">＋ Aplicar</button>
+            <button id="btn-cofre-retirar" class="btn-secundario">− Retirar</button>
+          </div>
+          <div id="cofre-movs" style="margin-top:14px"></div>
+        </div>
         <div class="cartao">
           <h3>Nova meta / planejamento</h3>
           <form id="form-meta" class="formulario">

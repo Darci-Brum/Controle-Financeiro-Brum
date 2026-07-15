@@ -12,10 +12,18 @@ Site completo de gestão financeira para o casal **Darci Brum** e **Jamylli Kaua
   carnes, limpeza, guloseimas, hortifruti, laticínios, padaria, bebidas, mercearia, higiene e pet.
   Tela de revisão para corrigir itens antes de salvar, gráfico de gastos por categoria de produto
   e histórico de notas com a foto anexada
-- **Cartões de crédito** — limite, fechamento, vencimento e acompanhamento da fatura do mês
-- **Empréstimos** — parcelas pagas/restantes com barra de progresso
-- **Investimentos** — carteira do casal com divisão por titular
-- **Planejamento** — metas com progresso e orçamento mensal (teto) por categoria
+- **Cartões de crédito** — limite, fechamento, vencimento e fatura do mês, com **cor de alerta
+  pelo limite restante** (🔴 até 25% livre · 🟡 até 40% · 🟠 até 70% · 🟢 acima) e **calendário
+  de faturas** com avisos quando o fechamento está a até 5 dias
+- **Empréstimos e contas/crediário** — valor total, valor pago e restante de cada um, com botão
+  para registrar pagamentos e selo de quitado
+- **Investimentos** — carteira do casal com divisão por titular, **% do CDI de cada aplicação**
+  e taxa CDI buscada automaticamente do Banco Central (ou digitada manualmente), com estimativa
+  de rendimento mensal
+- **Planejamento** — metas com progresso, orçamento mensal (teto) por categoria e **Cofre do
+  casal**: total guardado aparece como •••••• e só é revelado com senha (criada na primeira
+  aplicação); aplicações e retiradas recalculam o total automaticamente
+- **Modo TV** 📺 — tela cheia com letras grandes para apresentar o dashboard
 - **Tema claro / escuro** com um clique, em tons pastéis neutros e fundo tranquilo
 - **Filtros** por mês e por perfil (ou o casal inteiro)
 - Exportação dos dados em JSON

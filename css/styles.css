@@ -347,6 +347,68 @@ small { color: var(--texto-2); font-weight: 400; }
 .ultimo-item:last-child { border-bottom: none; }
 .ultimo-item .quem { color: var(--texto-mudo); font-size: .75rem; }
 
+/* ============ STATUS DOS CARTÕES (limite restante) ============ */
+.st-vermelho { border: 2px solid #d03b3b; }
+.st-amarelo  { border: 2px solid #fab219; }
+.st-laranja  { border: 2px solid #ec835a; }
+.st-verde    { border: 2px solid #0ca30c; }
+.st-vermelho .progresso > div { background: #d03b3b; }
+.st-amarelo  .progresso > div { background: #fab219; }
+.st-laranja  .progresso > div { background: #ec835a; }
+.st-verde    .progresso > div { background: #0ca30c; }
+.selo-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: .72rem; font-weight: 700; border-radius: 20px;
+  padding: 3px 10px; margin-top: 8px;
+  background: var(--superficie-2); border: 1px solid var(--borda);
+}
+
+/* ============ CALENDÁRIO DE FATURAS ============ */
+.calendario {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.cal-cab {
+  text-align: center; font-size: .68rem; text-transform: uppercase;
+  color: var(--texto-mudo); padding: 4px 0; letter-spacing: .05em;
+}
+.cal-dia {
+  min-height: 58px; border: 1px solid var(--grade); border-radius: 8px;
+  padding: 4px; font-size: .72rem; color: var(--texto-2);
+  display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+}
+.cal-dia.vazio-cal { border: none; }
+.cal-dia.hoje { border: 2px solid var(--acento); background: var(--acento-suave); }
+.cal-dia .num { font-weight: 700; color: var(--texto); }
+.cal-evento {
+  font-size: .62rem; border-radius: 5px; padding: 1px 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--superficie-2); border: 1px solid var(--borda); cursor: default;
+}
+.cal-evento.fecha { border-color: #ec835a; }
+.cal-evento.vence { border-color: #d03b3b; }
+.alertas-cartoes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.alerta-chip {
+  font-size: .78rem; border-radius: 20px; padding: 6px 12px;
+  background: var(--rosa-suave); border: 1px solid #ec835a;
+}
+@media (max-width: 640px) { .cal-dia { min-height: 44px; } .cal-evento { font-size: .55rem; } }
+
+/* ============ COFRE ============ */
+.mov-mask { letter-spacing: 2px; }
+
+/* ============ MODO TV ============ */
+body.modo-tv .abas,
+body.modo-tv .topo-marca small,
+body.modo-tv .seletor-mes,
+body.modo-tv .btn-sair { display: none !important; }
+body.modo-tv .conteudo { max-width: 100%; padding: 24px 40px; }
+body.modo-tv .card-resumo .valor { font-size: 2.4rem; }
+body.modo-tv .card-resumo .rotulo { font-size: 1rem; }
+body.modo-tv .cartao h3 { font-size: 1.3rem; }
+body.modo-tv .legenda-item { font-size: 1rem; }
+body.modo-tv .ultimo-item { font-size: 1.05rem; }
+body.modo-tv .topo { padding: 10px 40px; }
+
 /* ============ MERCADO / NOTA FISCAL ============ */
 .upload-area {
   border: 2px dashed var(--borda);
