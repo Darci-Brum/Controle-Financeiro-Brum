@@ -349,13 +349,62 @@ small { color: var(--texto-2); font-weight: 400; }
 
 /* ============ STATUS DOS CARTÕES (limite restante) ============ */
 .st-vermelho { border: 2px solid #d03b3b; }
-.st-amarelo  { border: 2px solid #fab219; }
-.st-laranja  { border: 2px solid #ec835a; }
+.st-azul     { border: 2px solid #2a78d6; }
 .st-verde    { border: 2px solid #0ca30c; }
 .st-vermelho .progresso > div { background: #d03b3b; }
-.st-amarelo  .progresso > div { background: #fab219; }
-.st-laranja  .progresso > div { background: #ec835a; }
+.st-azul     .progresso > div { background: #2a78d6; }
 .st-verde    .progresso > div { background: #0ca30c; }
+
+/* ============ HERO DO DASHBOARD ============ */
+.hero {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 18px; flex-wrap: wrap;
+  border-radius: 20px; padding: 22px 26px;
+  border: 1px solid var(--borda);
+  box-shadow: var(--sombra);
+  background:
+    radial-gradient(ellipse 400px 200px at 90% -20%, var(--azul-suave), transparent 70%),
+    radial-gradient(ellipse 400px 220px at 5% 120%, var(--rosa-suave), transparent 70%),
+    var(--superficie);
+}
+.hero-esq { display: flex; align-items: center; gap: 14px; }
+.hero-esq h2 { font-size: 1.25rem; }
+.hero-esq small { color: var(--texto-2); }
+.hero-saldo { text-align: right; }
+.hero-saldo span { font-size: .78rem; color: var(--texto-2); display: block; }
+.hero-saldo strong { font-size: 2rem; }
+.hero-saldo strong.pos { color: var(--positivo); }
+.hero-saldo strong.neg { color: var(--negativo); }
+.hero-chips { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+.chip-hero {
+  font-size: .8rem; padding: 6px 12px; border-radius: 20px;
+  background: var(--superficie-2); border: 1px solid var(--borda);
+}
+.chip-hero.pos { color: var(--positivo); font-weight: 600; }
+.chip-hero.neg { color: var(--negativo); font-weight: 600; }
+.chip-hero.alerta-orc { background: var(--rosa-suave); border-color: #ec835a; }
+.avatar-img { border-radius: 50%; object-fit: cover; border: 2px solid var(--borda); flex: none; }
+.delta-pos { color: var(--positivo); font-weight: 600; }
+.delta-neg { color: var(--negativo); font-weight: 600; }
+
+/* ============ VISÃO RÁPIDA ============ */
+.rapida-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 6px; border-bottom: 1px solid var(--grade);
+  font-size: .85rem; cursor: pointer; border-radius: 8px;
+}
+.rapida-item:last-child { border-bottom: none; }
+.rapida-item:hover { background: var(--superficie-2); }
+.rapida-item .direita { margin-left: auto; color: var(--texto-2); font-size: .78rem; text-align: right; }
+.pontinho { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.rapida-titulo { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--texto-mudo); margin: 10px 0 2px; }
+.rapida-titulo:first-child { margin-top: 0; }
+
+/* ============ GRÁFICO DE DÍVIDAS ============ */
+.divida-graf { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+.divida-graf svg { flex: none; }
+.divida-barras { flex: 1; min-width: 240px; }
+.divida-barras .barra-cat { margin-bottom: 10px; }
 .selo-status {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: .72rem; font-weight: 700; border-radius: 20px;

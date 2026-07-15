@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Controle Financeiro Brum</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#8aa88f">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -59,15 +61,26 @@
 
       <!-- ===== DASHBOARD ===== -->
       <section id="aba-dashboard" class="painel ativo">
+        <div id="dash-hero"></div>
         <div id="cards-resumo" class="cards-resumo"></div>
         <div class="grade-graficos">
+          <div class="cartao grafico-cartao">
+            <h3>📈 Evolução do saldo no mês <small id="saldo-legenda-mes"></small></h3>
+            <div id="grafico-saldo" class="area-grafico"></div>
+          </div>
           <div class="cartao grafico-cartao">
             <h3>Gastos por categoria <small id="donut-legenda-mes"></small></h3>
             <div id="grafico-donut" class="area-grafico"></div>
           </div>
+        </div>
+        <div class="grade-graficos">
           <div class="cartao grafico-cartao">
             <h3>Entradas × Saídas (últimos 6 meses)</h3>
             <div id="grafico-barras" class="area-grafico"></div>
+          </div>
+          <div class="cartao grafico-cartao">
+            <h3>⚡ Visão rápida</h3>
+            <div id="dash-rapida"></div>
           </div>
         </div>
         <div class="grade-graficos">
@@ -190,7 +203,7 @@
             <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar cartão</button></div>
           </form>
           <p class="dica" style="margin-top:12px">Cor do cartão conforme o <strong>limite restante</strong>:
-            🔴 até 25% restante · 🟡 até 40% · 🟠 até 70% · 🟢 acima de 70% livre</p>
+            🔴 até 25% livre · 🔵 até 70% · 🟢 acima de 70% livre</p>
         </div>
         <div id="lista-cartoes" class="grade-cartoes"></div>
 
@@ -214,6 +227,10 @@
             <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar</button></div>
           </form>
         </div>
+        <div class="cartao">
+          <h3>📊 Avanço dos pagamentos — Empréstimos</h3>
+          <div id="grafico-emprestimos"></div>
+        </div>
         <div id="lista-emprestimos" class="grade-cartoes"></div>
 
         <div class="cartao">
@@ -226,6 +243,10 @@
             <div class="campo"><label>Responsável</label><select id="cr-dono"></select></div>
             <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar</button></div>
           </form>
+        </div>
+        <div class="cartao">
+          <h3>📊 Avanço dos pagamentos — Contas/Crediário</h3>
+          <div id="grafico-crediarios"></div>
         </div>
         <div id="lista-crediarios" class="grade-cartoes"></div>
       </section>

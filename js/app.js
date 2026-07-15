@@ -172,6 +172,15 @@ function alternarTema() {
   renderTudo();
 }
 
+// ---------- Avatares (foto ou iniciais) ----------
+function avatarHtml(p, tam) {
+  if (p.foto) {
+    return `<img class="avatar-img" style="width:${tam}px;height:${tam}px" src="${p.foto}" alt="${escapar(p.nome)}">`;
+  }
+  const iniciais = p.nome.split(' ').map((n) => n[0]).slice(0, 2).join('');
+  return `<div class="perfil-avatar" style="background:${p.cor};width:${tam}px;height:${tam}px;font-size:${Math.round(tam * 0.38)}px">${escapar(iniciais)}</div>`;
+}
+
 // ---------- Login / sessão ----------
 function renderLogin() {
   const alvo = $('#lista-perfis-login');
@@ -179,9 +188,8 @@ function renderLogin() {
   dados.perfis.forEach((p) => {
     const btn = document.createElement('button');
     btn.className = 'perfil-btn';
-    const iniciais = p.nome.split(' ').map((n) => n[0]).slice(0, 2).join('');
     btn.innerHTML = `
-      <div class="perfil-avatar" style="background:${p.cor}">${escapar(iniciais)}</div>
+      <div style="display:flex;justify-content:center;margin-bottom:10px">${avatarHtml(p, 58)}</div>
       <strong>${escapar(p.nome)}</strong>
       <small>${escapar(p.emails[0] || 'sem e-mail cadastrado')}</small>`;
     btn.addEventListener('click', () => entrar(p.id));
@@ -288,34 +296,192 @@ function modalCategoria(cat) {
 // ==========================================================
 // DASHBOARD
 // ==========================================================
+function mesAnterior(ym) {
+  const [a, m] = ym.split('-').map(Number);
+  const d = new Date(a, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function htmlDelta(atual, anterior, invertido) {
+  if (!anterior) return '';
+  const pct = ((atual - anterior) / anterior) * 100;
+  if (!isFinite(pct) || Math.abs(pct) < 0.05) return 'igual ao mês anterior';
+  const subiu = pct > 0;
+  const bom = invertido ? !subiu : subiu; // para saídas, cair é bom
+  return `<span class="${bom ? 'delta-pos' : 'delta-neg'}">${subiu ? '▲' : '▼'} ${fmtPct(Math.abs(pct))}</span> vs ${rotuloMes(mesAnterior(mesRef))}`;
+}
+
 function renderDashboard() {
   const lanc = lancDoMes();
   const entradas = soma(lanc.filter((l) => l.tipo === 'entrada'));
   const saidas = soma(lanc.filter((l) => l.tipo === 'saida'));
   const saldo = entradas - saidas;
   const taxa = entradas > 0 ? (saldo / entradas) * 100 : 0;
+  const lancAnt = lancDoMes(mesAnterior(mesRef));
+  const entAnt = soma(lancAnt.filter((l) => l.tipo === 'entrada'));
+  const saiAnt = soma(lancAnt.filter((l) => l.tipo === 'saida'));
   const investido = soma(dados.investimentos.filter((i) => filtroPerfil === 'todos' || i.dono === filtroPerfil));
+  const dividas = [...dados.emprestimos, ...dados.crediarios]
+    .reduce((s, e) => s + Math.max(e.total - e.pago, 0), 0);
+
+  // Hero de boas-vindas
+  const p = dados.perfis.find((x) => x.id === perfilAtivo) || dados.perfis[0];
+  const estourados = dados.categorias
+    .filter((cat) => dados.orcamentos[cat] > 0)
+    .map((cat) => ({ cat, gasto: soma(lancDoMes(mesRef, 'todos').filter((l) => l.tipo === 'saida' && l.cat === cat)), teto: dados.orcamentos[cat] }))
+    .filter((o) => o.gasto > o.teto);
+  $('#dash-hero').innerHTML = `
+    <div class="hero">
+      <div class="hero-esq">
+        ${avatarHtml(p, 56)}
+        <div>
+          <h2>Olá, ${escapar(primeiroNome(p.id))}! 👋</h2>
+          <small>Resumo de ${rotuloMes(mesRef)} · ${filtroPerfil === 'todos' ? 'vocês dois' : primeiroNome(filtroPerfil)}</small>
+        </div>
+      </div>
+      <div class="hero-saldo">
+        <span>Saldo do mês</span>
+        <strong class="${saldo >= 0 ? 'pos' : 'neg'}">${fmtBRL(saldo)}</strong>
+      </div>
+      <div class="hero-chips">
+        <span class="chip-hero pos">⬆ ${fmtBRL(entradas)}</span>
+        <span class="chip-hero neg">⬇ ${fmtBRL(saidas)}</span>
+        ${entradas > 0 ? `<span class="chip-hero">💰 ${fmtPct(Math.max(taxa, 0))} economizado</span>` : ''}
+        ${estourados.map((o) => `<span class="chip-hero alerta-orc">⚠️ ${escapar(o.cat)}: estourou ${fmtBRL(o.gasto - o.teto)} do teto</span>`).join('')}
+      </div>
+    </div>`;
 
   const cards = [
-    { rot: '⬆ Entradas do mês', val: fmtBRL(entradas), cls: 'pos', extra: rotuloMes(mesRef) },
-    { rot: '⬇ Saídas do mês', val: fmtBRL(saidas), cls: 'neg', extra: lanc.filter((l) => l.tipo === 'saida').length + ' lançamentos' },
-    { rot: '💼 Saldo do mês', val: fmtBRL(saldo), cls: saldo >= 0 ? 'pos' : 'neg', extra: entradas > 0 ? 'Economia de ' + fmtPct(taxa) : '—' },
+    { rot: '⬆ Entradas do mês', val: fmtBRL(entradas), cls: 'pos', extra: htmlDelta(entradas, entAnt) || rotuloMes(mesRef) },
+    { rot: '⬇ Saídas do mês', val: fmtBRL(saidas), cls: 'neg', extra: htmlDelta(saidas, saiAnt, true) || lanc.filter((l) => l.tipo === 'saida').length + ' lançamentos' },
     { rot: '📈 Total investido', val: fmtBRL(investido), cls: '', extra: dados.investimentos.length + ' aportes' },
+    { rot: '🤝 Dívidas em aberto', val: fmtBRL(dividas), cls: dividas > 0 ? 'neg' : 'pos', extra: (dados.emprestimos.length + dados.crediarios.length) + ' contratos' },
   ];
   $('#cards-resumo').innerHTML = cards.map((c) => `
-    <div class="card-resumo" data-tt="${escapar(c.rot)}: ${escapar(c.val)}">
+    <div class="card-resumo">
       <div class="rotulo">${c.rot}</div>
       <div class="valor ${c.cls}">${c.val}</div>
       <div class="extra">${c.extra}</div>
     </div>`).join('');
 
-  $('#donut-legenda-mes').textContent = rotuloMes(mesRef) +
-    (filtroPerfil === 'todos' ? ' · casal' : ' · ' + primeiroNome(filtroPerfil));
+  const sufixo = rotuloMes(mesRef) + (filtroPerfil === 'todos' ? ' · casal' : ' · ' + primeiroNome(filtroPerfil));
+  $('#donut-legenda-mes').textContent = sufixo;
+  $('#saldo-legenda-mes').textContent = sufixo;
 
+  renderSaldoLinha(lanc);
   renderDonut(lanc);
   renderBarras();
+  renderRapida();
   renderPerfis(lanc);
   renderUltimos(lanc);
+}
+
+// --- Evolução do saldo acumulado no mês (área) ---
+function renderSaldoLinha(lanc) {
+  const alvo = $('#grafico-saldo');
+  if (!lanc.length) { alvo.innerHTML = '<p class="vazio">Sem lançamentos neste mês.</p>'; return; }
+  const [ano, mes] = mesRef.split('-').map(Number);
+  const totalDias = new Date(ano, mes, 0).getDate();
+  const porDia = Array(totalDias + 1).fill(0);
+  lanc.forEach((l) => { porDia[+l.data.slice(8, 10)] += l.tipo === 'entrada' ? l.valor : -l.valor; });
+  const serie = []; let acum = 0;
+  for (let d = 1; d <= totalDias; d++) { acum += porDia[d]; serie.push(acum); }
+
+  const W = 520, H = 220, mx = 52, my = 14, base = H - 28;
+  const vMax = Math.max(...serie, 0), vMin = Math.min(...serie, 0);
+  const faixa = vMax - vMin || 1;
+  const x = (d) => mx + ((d - 1) / (totalDias - 1)) * (W - mx - 12);
+  const y = (v) => my + (1 - (v - vMin) / faixa) * (base - my);
+
+  let caminho = '', area = `M ${x(1)} ${y(0)} `;
+  serie.forEach((v, i) => {
+    caminho += `${i === 0 ? 'M' : 'L'} ${x(i + 1).toFixed(1)} ${y(v).toFixed(1)} `;
+    area += `L ${x(i + 1).toFixed(1)} ${y(v).toFixed(1)} `;
+  });
+  area += `L ${x(totalDias)} ${y(0)} Z`;
+
+  let grade = '';
+  [vMin, vMin + faixa / 2, vMax].forEach((v) => {
+    grade += `<line x1="${mx}" y1="${y(v)}" x2="${W - 8}" y2="${y(v)}" stroke="var(--grade)"/>
+      <text x="${mx - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="var(--texto-mudo)">${Math.abs(v) >= 1000 ? (v / 1000).toFixed(1).replace('.', ',') + ' mil' : Math.round(v)}</text>`;
+  });
+  const zeroY = y(0);
+  const cores = coresSeries();
+  const corLinha = cores[0];
+  const ultimo = serie[totalDias - 1];
+
+  // pontos de interação: um retângulo invisível por dia
+  let toques = '';
+  for (let d = 1; d <= totalDias; d++) {
+    toques += `<rect x="${(x(d) - (W - mx) / totalDias / 2).toFixed(1)}" y="${my}" width="${((W - mx) / totalDias).toFixed(1)}" height="${base - my}"
+      fill="transparent" data-dia="${d}" data-val="${serie[d - 1].toFixed(2)}"/>`;
+  }
+
+  alvo.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução do saldo acumulado no mês">
+      ${grade}
+      <line x1="${mx}" y1="${zeroY}" x2="${W - 8}" y2="${zeroY}" stroke="var(--texto-mudo)" stroke-dasharray="3 3"/>
+      <path d="${area}" fill="${corLinha}" opacity="0.14"/>
+      <path d="${caminho}" fill="none" stroke="${corLinha}" stroke-width="2.5" stroke-linejoin="round"/>
+      <circle id="saldo-ponto" r="4.5" fill="${corLinha}" stroke="var(--superficie)" stroke-width="2" opacity="0"/>
+      <text x="${x(totalDias) - 4}" y="${y(ultimo) - 10}" text-anchor="end" font-size="12" font-weight="700"
+        fill="${ultimo >= 0 ? 'var(--positivo)' : 'var(--negativo)'}">${fmtBRL(ultimo)}</text>
+      ${toques}
+      <text x="${mx}" y="${H - 8}" font-size="10" fill="var(--texto-mudo)">dia 1</text>
+      <text x="${W - 10}" y="${H - 8}" text-anchor="end" font-size="10" fill="var(--texto-mudo)">dia ${totalDias}</text>
+    </svg>`;
+
+  const ponto = alvo.querySelector('#saldo-ponto');
+  alvo.querySelectorAll('rect').forEach((r) => {
+    r.addEventListener('mousemove', (ev) => {
+      const d = +r.dataset.dia, v = +r.dataset.val;
+      ponto.setAttribute('cx', x(d)); ponto.setAttribute('cy', y(v)); ponto.setAttribute('opacity', 1);
+      mostrarTooltip(ev, `<strong>Dia ${d} de ${rotuloMes(mesRef)}</strong>
+        <div class="tt-linha">Saldo acumulado: ${fmtBRL(v)}</div>`);
+    });
+    r.addEventListener('mouseleave', () => { ponto.setAttribute('opacity', 0); esconderTooltip(); });
+  });
+}
+
+// --- Visão rápida (atalhos com status) ---
+function renderRapida() {
+  const alvo = $('#dash-rapida');
+  let html = '';
+
+  if (dados.cartoes.length) {
+    html += '<div class="rapida-titulo">💳 Cartões</div>';
+    dados.cartoes.forEach((c) => {
+      const gasto = soma(lancDoMes(mesRef, 'todos').filter((l) => l.tipo === 'saida' && l.cartaoId == c.id));
+      const restPct = c.limite > 0 ? 100 - Math.min((gasto / c.limite) * 100, 100) : 100;
+      const st = statusCartao(restPct);
+      html += `<div class="rapida-item" data-aba="cartoes">
+        <span class="pontinho" style="background:${st.cor}"></span> ${escapar(c.nome)}
+        <span class="direita">${fmtPct(restPct)} livre · fecha dia ${c.fecha}</span></div>`;
+    });
+  }
+
+  const dividas = [...dados.emprestimos.map((e) => ({ ...e, ic: '🤝' })), ...dados.crediarios.map((c) => ({ ...c, ic: '🧾' }))]
+    .filter((e) => e.total - e.pago > 0.005)
+    .sort((a, b) => (b.total - b.pago) - (a.total - a.pago)).slice(0, 3);
+  if (dividas.length) {
+    html += '<div class="rapida-titulo">🤝 Maiores dívidas</div>';
+    dividas.forEach((e) => {
+      html += `<div class="rapida-item" data-aba="emprestimos">${e.ic} ${escapar(e.desc)}
+        <span class="direita">falta ${fmtBRL(e.total - e.pago)}</span></div>`;
+    });
+  }
+
+  const metas = [...dados.metas].sort((a, b) => (b.atual / b.alvo) - (a.atual / a.alvo)).slice(0, 3);
+  if (metas.length) {
+    html += '<div class="rapida-titulo">🎯 Metas</div>';
+    metas.forEach((m) => {
+      html += `<div class="rapida-item" data-aba="planejamento">🎯 ${escapar(m.nome)}
+        <span class="direita">${fmtPct(Math.min((m.atual / m.alvo) * 100, 100))}</span></div>`;
+    });
+  }
+
+  alvo.innerHTML = html || '<p class="vazio">Cadastre cartões, dívidas e metas para ver os atalhos aqui.</p>';
+  alvo.querySelectorAll('.rapida-item').forEach((el) =>
+    el.addEventListener('click', () => document.querySelector(`[data-aba="${el.dataset.aba}"]`).click()));
 }
 
 // --- Gráfico de rosca (categorias) ---
@@ -539,12 +705,12 @@ function configurarFormLancamento() {
 // ==========================================================
 // CARTÕES
 // ==========================================================
-// Cor conforme o limite RESTANTE: ≤25% vermelho, ≤40% amarelo, ≤70% laranja, acima verde
+// Cor conforme o limite RESTANTE — paleta azul/vermelho/verde:
+// ≤25% livre vermelho · ≤70% azul · acima verde
 function statusCartao(restantePct) {
-  if (restantePct <= 25) return { cls: 'st-vermelho', selo: '🔴 Limite crítico' };
-  if (restantePct <= 40) return { cls: 'st-amarelo', selo: '🟡 Atenção ao limite' };
-  if (restantePct <= 70) return { cls: 'st-laranja', selo: '🟠 Uso moderado' };
-  return { cls: 'st-verde', selo: '🟢 Limite tranquilo' };
+  if (restantePct <= 25) return { cls: 'st-vermelho', selo: '🔴 Limite crítico', cor: '#d03b3b' };
+  if (restantePct <= 70) return { cls: 'st-azul', selo: '🔵 Uso moderado', cor: '#2a78d6' };
+  return { cls: 'st-verde', selo: '🟢 Limite tranquilo', cor: '#0ca30c' };
 }
 function renderCartoes() {
   const alvo = $('#lista-cartoes');
@@ -645,6 +811,56 @@ function ligarPagamentos(container, colecao) {
     }
   }));
 }
+// Gráfico de avanço: rosca com o % total quitado + barras por item
+function renderGraficoDividas(alvoSel, lista) {
+  const alvo = $(alvoSel);
+  if (!lista.length) { alvo.innerHTML = '<p class="vazio">Nada cadastrado ainda.</p>'; return; }
+  const totalGeral = lista.reduce((s, x) => s + x.total, 0);
+  const pagoGeral = lista.reduce((s, x) => s + Math.min(x.pago, x.total), 0);
+  const pctGeral = totalGeral > 0 ? (pagoGeral / totalGeral) * 100 : 0;
+
+  // rosca de duas fatias (pago × restante)
+  const cx = 75, cy = 75, R = 62, r = 44;
+  const ang = -Math.PI / 2 + (pctGeral / 100) * Math.PI * 2;
+  const p = (a, rad) => `${(cx + rad * Math.cos(a)).toFixed(1)},${(cy + rad * Math.sin(a)).toFixed(1)}`;
+  const grande = pctGeral > 50 ? 1 : 0;
+  const cores = coresSeries();
+  const fatiaPago = pctGeral >= 99.95
+    ? `<circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="${cores[1]}" stroke-width="${R - r}"/>`
+    : pctGeral <= 0.05 ? ''
+      : `<path d="M ${p(-Math.PI / 2, R)} A ${R} ${R} 0 ${grande} 1 ${p(ang, R)} L ${p(ang, r)} A ${r} ${r} 0 ${grande} 0 ${p(-Math.PI / 2, r)} Z" fill="${cores[1]}"/>`;
+
+  const barras = lista.map((item, i) => {
+    const pct = item.total > 0 ? Math.min((item.pago / item.total) * 100, 100) : 0;
+    return `
+      <div class="barra-cat divida-hover" data-desc="${escapar(item.desc)}" data-pago="${item.pago}" data-resta="${Math.max(item.total - item.pago, 0)}" data-pct="${pct.toFixed(1)}">
+        <div class="prog-info"><span>${escapar(item.desc)}</span><span><strong>${fmtPct(pct)}</strong> pago</span></div>
+        <div class="progresso"><div style="width:${pct}%; background:${cores[i % 8]}"></div></div>
+      </div>`;
+  }).join('');
+
+  alvo.innerHTML = `
+    <div class="divida-graf">
+      <svg width="150" height="150" viewBox="0 0 150 150" role="img" aria-label="Percentual total quitado">
+        <circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="var(--grade)" stroke-width="${R - r}"/>
+        ${fatiaPago}
+        <text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="20" font-weight="700" fill="var(--texto)">${fmtPct(pctGeral)}</text>
+        <text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="10" fill="var(--texto-2)">quitado</text>
+      </svg>
+      <div class="divida-barras">${barras}
+        <p class="dica" style="margin-top:6px">Pago: <strong>${fmtBRL(pagoGeral)}</strong> · Restante: <strong>${fmtBRL(totalGeral - pagoGeral)}</strong> de ${fmtBRL(totalGeral)}</p>
+      </div>
+    </div>`;
+
+  alvo.querySelectorAll('.divida-hover').forEach((el) => {
+    el.addEventListener('mousemove', (ev) => mostrarTooltip(ev, `
+      <strong>${el.dataset.desc}</strong>
+      <div class="tt-linha">Pago: ${fmtBRL(+el.dataset.pago)} (${el.dataset.pct.replace('.', ',')}%)</div>
+      <div class="tt-linha">Restante: ${fmtBRL(+el.dataset.resta)}</div>`));
+    el.addEventListener('mouseleave', esconderTooltip);
+  });
+}
+
 function renderEmprestimos() {
   const alvo = $('#lista-emprestimos');
   alvo.innerHTML = dados.emprestimos.length
@@ -652,6 +868,7 @@ function renderEmprestimos() {
     : '<p class="vazio cartao">Nenhum empréstimo cadastrado. Que continue assim! 🎉</p>';
   ligarRemocao(alvo, 'emprestimos');
   ligarPagamentos(alvo, 'emprestimos');
+  renderGraficoDividas('#grafico-emprestimos', dados.emprestimos);
 }
 function renderCrediarios() {
   const alvo = $('#lista-crediarios');
@@ -660,6 +877,7 @@ function renderCrediarios() {
     : '<p class="vazio cartao">Nenhuma conta ou crediário cadastrado.</p>';
   ligarRemocao(alvo, 'crediarios');
   ligarPagamentos(alvo, 'crediarios');
+  renderGraficoDividas('#grafico-crediarios', dados.crediarios);
 }
 
 // ==========================================================
@@ -887,10 +1105,11 @@ function renderConfig() {
   alvo.innerHTML = dados.perfis.map((p) => `
     <div class="perfil-config">
       <div class="perfil-config-topo">
-        <div class="perfil-avatar" style="background:${p.cor}; width:42px; height:42px; font-size:1rem">
-          ${p.nome.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-        </div>
-        <strong>${escapar(p.nome)}</strong>
+        ${avatarHtml(p, 46)}
+        <strong style="flex:1">${escapar(p.nome)}</strong>
+        <button class="btn-secundario btn-foto" data-perfil="${p.id}">📷 ${p.foto ? 'Trocar' : 'Adicionar'} foto</button>
+        ${p.foto ? `<button class="btn-secundario btn-foto-remover" data-perfil="${p.id}">✕ Remover foto</button>` : ''}
+        <input type="file" accept="image/*" class="oculto inp-foto" data-perfil="${p.id}">
       </div>
       <div class="emails-lista">
         ${p.emails.map((em, i) => `
@@ -903,6 +1122,36 @@ function renderConfig() {
         <button type="submit" class="btn-secundario">＋ Adicionar e-mail</button>
       </form>
     </div>`).join('');
+
+  // Foto de perfil
+  alvo.querySelectorAll('.btn-foto').forEach((b) => b.addEventListener('click', () =>
+    alvo.querySelector(`.inp-foto[data-perfil="${b.dataset.perfil}"]`).click()));
+  alvo.querySelectorAll('.btn-foto-remover').forEach((b) => b.addEventListener('click', () => {
+    const p = dados.perfis.find((x) => x.id === b.dataset.perfil);
+    delete p.foto;
+    salvar(); renderTudo();
+    if (!perfilAtivo) renderLogin();
+  }));
+  alvo.querySelectorAll('.inp-foto').forEach((inp) => inp.addEventListener('change', () => {
+    const f = inp.files[0];
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => {
+      // recorte quadrado central, reduzido para 128px
+      const lado = Math.min(img.width, img.height);
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 128;
+      cv.getContext('2d').drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, 128, 128);
+      URL.revokeObjectURL(url);
+      const p = dados.perfis.find((x) => x.id === inp.dataset.perfil);
+      p.foto = cv.toDataURL('image/jpeg', 0.8);
+      try { salvar(); } catch (e) { delete p.foto; alert('A foto é grande demais para o armazenamento do navegador.'); }
+      renderTudo();
+    };
+    img.onerror = () => alert('Não foi possível abrir essa imagem.');
+    img.src = url;
+  }));
 
   alvo.querySelectorAll('.form-email').forEach((f) => f.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1408,6 +1657,11 @@ function iniciar() {
   $('#btn-cdi-buscar').addEventListener('click', buscarCDI);
   $('#cdi-valor').addEventListener('change', renderInvestimentos);
   buscarCDI();
+
+  // PWA: permite instalar como aplicativo e abrir sem internet
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
 
   if (perfilAtivo && dados.perfis.some((p) => p.id === perfilAtivo)) entrar(perfilAtivo);
   else renderLogin();
