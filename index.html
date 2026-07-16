@@ -39,6 +39,7 @@
         <select id="filtro-perfil" class="seletor-mes" title="Filtrar por perfil">
           <option value="todos">👫 Casal (tudo)</option>
         </select>
+        <button id="btn-relatorio" class="btn-icone" title="Relatório do mês (imprimir / salvar em PDF)">🖨</button>
         <button id="btn-tv" class="btn-icone" title="Modo TV — tela cheia para apresentação">📺</button>
         <button id="btn-tema" class="btn-icone" title="Alternar tema claro/escuro">🌙</button>
         <button id="btn-sair" class="btn-sair" title="Sair do perfil">Sair ⏻</button>
@@ -48,6 +49,7 @@
     <!-- Abas -->
     <nav class="abas">
       <button class="aba ativa" data-aba="dashboard">📊 Dashboard</button>
+      <button class="aba" data-aba="anual">📅 Anual</button>
       <button class="aba" data-aba="lancamentos">💸 Lançamentos</button>
       <button class="aba" data-aba="mercado">🛒 Mercado</button>
       <button class="aba" data-aba="cartoes">💳 Cartões</button>
@@ -117,8 +119,27 @@
               </select>
             </div>
             <div class="campo oculto" id="campo-cartao"><label>Cartão</label><select id="lc-cartao"></select></div>
-            <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar</button></div>
+            <div class="campo"><label>Repetição</label>
+              <label class="check-linha"><input type="checkbox" id="lc-recorrente"> 🔁 Repetir todo mês</label>
+            </div>
+            <div class="campo campo-botao"><button type="submit" id="btn-lanc-salvar" class="btn-principal">Adicionar</button>
+              <button type="button" id="btn-lanc-cancelar" class="btn-secundario oculto">Cancelar edição</button></div>
           </form>
+        </div>
+        <div class="cartao">
+          <h3>🔁 Lançamentos fixos <small>entram sozinhos todo mês</small></h3>
+          <div id="lista-recorrentes"></div>
+        </div>
+        <div class="cartao">
+          <h3>📥 Importar extrato do banco <small>CSV ou OFX</small></h3>
+          <p class="dica">Exporte o extrato pelo app do seu banco (formato <strong>CSV</strong> ou <strong>OFX</strong>) e envie aqui.
+            O site lê as movimentações, sugere as categorias e mostra uma prévia para você revisar antes de importar.
+            Movimentações que já existem são marcadas como possíveis duplicadas.</p>
+          <div class="linha-botoes">
+            <input type="file" id="ext-arquivo" accept=".csv,.ofx,.txt" class="oculto">
+            <button id="btn-extrato" class="btn-principal" type="button">📥 Escolher arquivo do extrato</button>
+          </div>
+          <div id="extrato-previa" style="margin-top:14px"></div>
         </div>
         <div class="cartao">
           <h3>Lançamentos do mês <small id="lc-total-mes"></small></h3>
@@ -126,6 +147,27 @@
             <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Perfil</th><th>Pagamento</th><th class="dir">Valor</th><th></th></tr></thead>
             <tbody></tbody>
           </table></div>
+        </div>
+      </section>
+
+      <!-- ===== ANUAL ===== -->
+      <section id="aba-anual" class="painel">
+        <div class="cartao">
+          <h3>📅 Comparativo anual <small>visão do ano inteiro</small></h3>
+          <div class="formulario" style="max-width:200px">
+            <div class="campo"><label>Ano</label><select id="anual-ano"></select></div>
+          </div>
+        </div>
+        <div id="anual-cards" class="cards-resumo"></div>
+        <div class="grade-graficos">
+          <div class="cartao grafico-cartao">
+            <h3>Saldo mês a mês</h3>
+            <div id="anual-barras" class="area-grafico"></div>
+          </div>
+          <div class="cartao grafico-cartao">
+            <h3>Gastos do ano por categoria</h3>
+            <div id="anual-categorias"></div>
+          </div>
         </div>
       </section>
 
@@ -250,6 +292,17 @@
           <div id="grafico-crediarios"></div>
         </div>
         <div id="lista-crediarios" class="grade-cartoes"></div>
+
+        <div class="cartao">
+          <h3>🧮 Simulador de quitação <small>e se eu pagar um pouco a mais?</small></h3>
+          <div class="formulario">
+            <div class="campo"><label>Dívida</label><select id="sim-divida"></select></div>
+            <div class="campo"><label>Pagamento por mês (R$)</label><input id="sim-mensal" type="number" step="0.01" min="1" placeholder="ex.: 500"></div>
+            <div class="campo"><label>Extra por mês (R$)</label><input id="sim-extra" type="number" step="0.01" min="0" placeholder="ex.: 100"></div>
+            <div class="campo campo-botao"><button id="btn-simular" class="btn-principal" type="button">Simular</button></div>
+          </div>
+          <div id="sim-resultado" style="margin-top:12px"></div>
+        </div>
       </section>
 
       <!-- ===== INVESTIMENTOS ===== -->
@@ -281,7 +334,7 @@
         <div class="cartao">
           <h3>Carteira</h3>
           <div class="tabela-scroll"><table class="tabela" id="tabela-invest">
-            <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Titular</th><th class="dir">% CDI</th><th class="dir">Rende ≈/mês</th><th class="dir">Valor</th><th></th></tr></thead>
+            <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Titular</th><th class="dir">% CDI</th><th class="dir">Rende ≈/mês</th><th class="dir">Valor aplicado</th><th class="dir">Hoje ≈</th><th></th></tr></thead>
             <tbody></tbody>
           </table></div>
         </div>
@@ -383,6 +436,12 @@
           </form>
         </div>
         <div class="cartao">
+          <h3>🔐 PIN de entrada</h3>
+          <p class="dica">Proteja o site com um PIN de 4 a 6 números, pedido sempre que abrir.
+            <strong>Anote em lugar seguro:</strong> se esquecer o PIN, só limpando os dados do navegador.</p>
+          <div class="linha-botoes" id="pin-botoes"></div>
+        </div>
+        <div class="cartao">
           <h3>Dados</h3>
           <div class="linha-botoes">
             <button id="btn-exportar" class="btn-secundario">⬇ Exportar dados (JSON)</button>
@@ -394,6 +453,20 @@
 
     </main>
   </div>
+
+  <!-- ===== TELA DE PIN ===== -->
+  <div id="tela-pin" class="tela-login oculto">
+    <div class="login-card">
+      <div class="login-logo">🔐</div>
+      <h1>Digite o PIN</h1>
+      <p class="login-sub">Este site está protegido por PIN</p>
+      <input id="pin-campo" type="password" inputmode="numeric" maxlength="6" class="pin-campo" placeholder="••••" autocomplete="off">
+      <p id="pin-erro" class="login-rodape"></p>
+    </div>
+  </div>
+
+  <!-- ===== RELATÓRIO (só aparece na impressão) ===== -->
+  <div id="relatorio" class="relatorio"></div>
 
   <!-- ===== MODAL ===== -->
   <div id="modal" class="modal-fundo oculto">

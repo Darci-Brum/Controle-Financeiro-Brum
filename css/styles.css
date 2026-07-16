@@ -497,6 +497,56 @@ body.modo-tv .topo { padding: 10px 40px; }
 .barra-cat { margin-bottom: 12px; }
 .img-modal { max-width: 100%; border-radius: 10px; }
 
+/* ============ EXTRAS: recorrentes, PIN, relatório ============ */
+.check-linha {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--superficie-2); border: 1px solid var(--borda);
+  border-radius: 10px; padding: 9px 10px; font-size: .85rem; cursor: pointer;
+}
+.check-linha input { accent-color: var(--acento); width: 16px; height: 16px; }
+
+.pin-campo {
+  font-size: 1.6rem; text-align: center; letter-spacing: 8px;
+  background: var(--superficie-2); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 12px;
+  padding: 12px; width: 200px; margin-top: 8px;
+}
+#pin-erro { color: var(--negativo); min-height: 1.2em; }
+
+.rec-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 4px; border-bottom: 1px solid var(--grade); font-size: .85rem;
+}
+.rec-item:last-child { border-bottom: none; }
+.rec-item .rec-info { flex: 1; }
+.rec-item.pausado { opacity: .5; }
+
+.sim-caixa {
+  background: var(--acento-suave); border: 1px solid var(--borda);
+  border-radius: 12px; padding: 14px 16px; font-size: .9rem;
+}
+
+/* Relatório: invisível na tela, vira a página inteira na impressão */
+.relatorio { display: none; }
+@media print {
+  body.imprimindo .tela-login, body.imprimindo .app,
+  body.imprimindo .modal-fundo, body.imprimindo .tooltip, body.imprimindo #tela-pin { display: none !important; }
+  body.imprimindo .relatorio { display: block !important; }
+  body.imprimindo { background: #fff !important; }
+}
+.relatorio { color: #1a1a19; font-size: 12px; padding: 24px; }
+.relatorio h1 { font-size: 20px; margin-bottom: 2px; }
+.relatorio h2 { font-size: 14px; margin: 18px 0 8px; border-bottom: 1.5px solid #ccc; padding-bottom: 4px; }
+.relatorio .rel-sub { color: #666; margin-bottom: 12px; }
+.relatorio table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.relatorio th { text-align: left; font-size: 10px; text-transform: uppercase; color: #777; padding: 4px 6px; border-bottom: 1px solid #ccc; }
+.relatorio td { padding: 4px 6px; border-bottom: 1px solid #eee; }
+.relatorio .dir { text-align: right; }
+.relatorio .rel-kpis { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0; }
+.relatorio .rel-kpi { border: 1px solid #ddd; border-radius: 8px; padding: 8px 14px; }
+.relatorio .rel-kpi small { display: block; color: #777; font-size: 10px; }
+.relatorio .rel-kpi strong { font-size: 15px; }
+
 /* ============ MODAL ============ */
 .modal-fundo {
   position: fixed; inset: 0; z-index: 300;

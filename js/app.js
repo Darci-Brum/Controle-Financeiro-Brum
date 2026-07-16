@@ -44,6 +44,8 @@ function estadoInicial() {
     metas: [],
     notas: [], // notas fiscais do mercado
     salarios: [], // registro de trabalho (bruto, líquido, FGTS)
+    recorrentes: [], // lançamentos fixos mensais
+    pin: null, // PIN de entrada (hash)
     cofre: { senha: null, movs: [] },
     orcamentos: {}, // { 'Mercado': 900, ... }
     proximoId: 100,
@@ -156,6 +158,7 @@ function carregar() {
       if (!d.exemplosV3) adicionarExemplosTrabalho(d);
       d.salarios.forEach((s) => { if (!s.tipo) s.tipo = 'salario'; });
       if (!d.exemplosV4) adicionarExemplosFeriasDecimo(d);
+      if (!d.recorrentes) d.recorrentes = [];
       return d;
     }
   } catch (e) { /* dados corrompidos: recomeça */ }
@@ -388,6 +391,7 @@ function renderDashboard() {
         <span class="chip-hero neg">⬇ ${fmtBRL(saidas)}</span>
         ${entradas > 0 ? `<span class="chip-hero">💰 ${fmtPct(Math.max(taxa, 0))} economizado</span>` : ''}
         ${estourados.map((o) => `<span class="chip-hero alerta-orc">⚠️ ${escapar(o.cat)}: estourou ${fmtBRL(o.gasto - o.teto)} do teto</span>`).join('')}
+        ${avisosFaturas().map((a) => `<span class="chip-hero alerta-orc">${escapar(a)}</span>`).join('')}
       </div>
     </div>`;
 
@@ -690,31 +694,67 @@ function renderLancamentos() {
   corpo.innerHTML = lanc.map((l) => `
     <tr>
       <td>${fmtData(l.data)}</td>
-      <td>${escapar(l.desc)}</td>
+      <td>${escapar(l.desc)}${l.recId ? ' <span title="Lançamento fixo">🔁</span>' : ''}</td>
       <td><span class="chip-cat">${escapar(l.cat)}</span></td>
       <td>${escapar(primeiroNome(l.perfil))}</td>
       <td>${escapar(l.pag)}${l.cartaoId ? ' · ' + escapar((dados.cartoes.find((c) => c.id == l.cartaoId) || {}).nome || '') : ''}</td>
       <td class="dir ${l.tipo === 'entrada' ? 'val-pos' : 'val-neg'}">${l.tipo === 'entrada' ? '+' : '−'} ${fmtBRL(l.valor)}</td>
-      <td><button class="btn-lixo" data-id="${l.id}" title="Excluir">🗑</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn-lixo btn-ed" data-id="${l.id}" title="Editar">✏️</button>
+        <button class="btn-lixo btn-del" data-id="${l.id}" title="Excluir">🗑</button>
+      </td>
     </tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum lançamento neste mês.</td></tr>';
 
-  corpo.querySelectorAll('.btn-lixo').forEach((b) => b.addEventListener('click', () => {
+  corpo.querySelectorAll('.btn-del').forEach((b) => b.addEventListener('click', () => {
     if (confirm('Excluir este lançamento?')) {
       dados.lancamentos = dados.lancamentos.filter((l) => l.id != b.dataset.id);
       salvar(); renderTudo();
     }
   }));
+  corpo.querySelectorAll('.btn-ed').forEach((b) => b.addEventListener('click', () => editarLancamento(+b.dataset.id)));
+}
+
+// --- Edição de lançamentos ---
+let editandoLancId = null;
+
+function setTipoLanc(t) {
+  tipoLanc = t;
+  $('#tg-entrada').classList.toggle('ativo', t === 'entrada');
+  $('#tg-saida').classList.toggle('ativo', t === 'saida');
+  atualizarCategoriasForm();
+}
+function resetFormLanc() {
+  editandoLancId = null;
+  $('#form-lancamento').reset();
+  $('#lc-data').value = new Date().toISOString().slice(0, 10);
+  if (perfilAtivo) $('#lc-perfil').value = perfilAtivo;
+  $('#campo-cartao').classList.add('oculto');
+  $('#btn-lanc-salvar').textContent = 'Adicionar';
+  $('#btn-lanc-cancelar').classList.add('oculto');
+}
+function editarLancamento(id) {
+  const l = dados.lancamentos.find((x) => x.id === id);
+  if (!l) return;
+  setTipoLanc(l.tipo);
+  $('#lc-desc').value = l.desc;
+  $('#lc-valor').value = l.valor;
+  $('#lc-data').value = l.data;
+  $('#lc-cat').value = l.cat;
+  $('#lc-perfil').value = l.perfil;
+  $('#lc-pag').value = l.pag;
+  $('#campo-cartao').classList.toggle('oculto', l.pag !== 'Cartão de crédito');
+  if (l.cartaoId) $('#lc-cartao').value = l.cartaoId;
+  editandoLancId = l.id;
+  $('#btn-lanc-salvar').textContent = '💾 Salvar alterações';
+  $('#btn-lanc-cancelar').classList.remove('oculto');
+  $('#form-lancamento').scrollIntoView({ behavior: 'smooth' });
+  $('#lc-desc').focus();
 }
 
 function configurarFormLancamento() {
-  const setTipo = (t) => {
-    tipoLanc = t;
-    $('#tg-entrada').classList.toggle('ativo', t === 'entrada');
-    $('#tg-saida').classList.toggle('ativo', t === 'saida');
-    atualizarCategoriasForm();
-  };
-  $('#tg-entrada').addEventListener('click', () => setTipo('entrada'));
-  $('#tg-saida').addEventListener('click', () => setTipo('saida'));
+  $('#tg-entrada').addEventListener('click', () => setTipoLanc('entrada'));
+  $('#tg-saida').addEventListener('click', () => setTipoLanc('saida'));
+  $('#btn-lanc-cancelar').addEventListener('click', resetFormLanc);
 
   $('#lc-pag').addEventListener('change', () => {
     $('#campo-cartao').classList.toggle('oculto', $('#lc-pag').value !== 'Cartão de crédito');
@@ -723,7 +763,6 @@ function configurarFormLancamento() {
   $('#form-lancamento').addEventListener('submit', (e) => {
     e.preventDefault();
     const l = {
-      id: novoId(),
       tipo: tipoLanc,
       desc: $('#lc-desc').value.trim(),
       cat: $('#lc-cat').value,
@@ -733,14 +772,79 @@ function configurarFormLancamento() {
       pag: $('#lc-pag').value,
     };
     if ($('#lc-pag').value === 'Cartão de crédito' && $('#lc-cartao').value) l.cartaoId = +$('#lc-cartao').value;
-    dados.lancamentos.push(l);
+
+    if (editandoLancId !== null) {
+      const i = dados.lancamentos.findIndex((x) => x.id === editandoLancId);
+      if (i >= 0) {
+        l.id = editandoLancId;
+        if (dados.lancamentos[i].recId) l.recId = dados.lancamentos[i].recId;
+        dados.lancamentos[i] = l;
+      }
+    } else {
+      l.id = novoId();
+      dados.lancamentos.push(l);
+      if ($('#lc-recorrente').checked) {
+        dados.recorrentes.push({
+          id: novoId(), ativo: true, tipo: l.tipo, desc: l.desc, cat: l.cat,
+          valor: l.valor, perfil: l.perfil, pag: l.pag,
+          ...(l.cartaoId ? { cartaoId: l.cartaoId } : {}),
+          dia: +l.data.slice(8, 10),
+        });
+        l.recId = dados.recorrentes[dados.recorrentes.length - 1].id;
+      }
+    }
     salvar();
-    $('#form-lancamento').reset();
-    $('#lc-data').value = new Date().toISOString().slice(0, 10);
-    $('#lc-perfil').value = perfilAtivo;
-    $('#campo-cartao').classList.add('oculto');
+    resetFormLanc();
     renderTudo();
   });
+}
+
+// --- Lançamentos fixos (recorrentes) ---
+function materializarRecorrentes() {
+  const agora = new Date();
+  const ym = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
+  const ultimoDia = new Date(agora.getFullYear(), agora.getMonth() + 1, 0).getDate();
+  let criou = false;
+  dados.recorrentes.forEach((r) => {
+    if (!r.ativo) return;
+    if (dados.lancamentos.some((l) => l.recId === r.id && l.data.startsWith(ym))) return;
+    const dia = Math.min(r.dia || 1, ultimoDia);
+    dados.lancamentos.push({
+      id: novoId(), recId: r.id, tipo: r.tipo, desc: r.desc, cat: r.cat, valor: r.valor,
+      data: `${ym}-${String(dia).padStart(2, '0')}`, perfil: r.perfil, pag: r.pag,
+      ...(r.cartaoId ? { cartaoId: r.cartaoId } : {}),
+    });
+    criou = true;
+  });
+  if (criou) salvar();
+}
+function renderRecorrentes() {
+  const alvo = $('#lista-recorrentes');
+  if (!dados.recorrentes.length) {
+    alvo.innerHTML = '<p class="vazio">Nenhum lançamento fixo ainda. Marque "🔁 Repetir todo mês" ao adicionar um lançamento.</p>';
+    return;
+  }
+  alvo.innerHTML = dados.recorrentes.map((r) => `
+    <div class="rec-item ${r.ativo ? '' : 'pausado'}">
+      <span>${r.tipo === 'entrada' ? '⬆' : '⬇'}</span>
+      <div class="rec-info">${escapar(r.desc)}
+        <small>· ${escapar(r.cat)} · todo dia ${r.dia} · ${escapar(primeiroNome(r.perfil))}${r.ativo ? '' : ' · pausado'}</small></div>
+      <strong class="${r.tipo === 'entrada' ? 'val-pos' : 'val-neg'}">${fmtBRL(r.valor)}</strong>
+      <button class="btn-secundario rec-pausar" data-id="${r.id}">${r.ativo ? '⏸ Pausar' : '▶ Ativar'}</button>
+      <button class="btn-lixo rec-remover" data-id="${r.id}" title="Excluir">🗑</button>
+    </div>`).join('');
+  alvo.querySelectorAll('.rec-pausar').forEach((b) => b.addEventListener('click', () => {
+    const r = dados.recorrentes.find((x) => x.id == b.dataset.id);
+    r.ativo = !r.ativo;
+    if (r.ativo) materializarRecorrentes();
+    salvar(); renderTudo();
+  }));
+  alvo.querySelectorAll('.rec-remover').forEach((b) => b.addEventListener('click', () => {
+    if (confirm('Excluir este lançamento fixo? Os lançamentos já criados por ele continuam.')) {
+      dados.recorrentes = dados.recorrentes.filter((x) => x.id != b.dataset.id);
+      salvar(); renderTudo();
+    }
+  }));
 }
 
 // ==========================================================
@@ -951,14 +1055,24 @@ function rendimentoMes(inv) {
   if (!cdi || !inv.pctCdi) return null;
   return inv.valor * (cdi / 100) * (inv.pctCdi / 100) / 12;
 }
+// Valor estimado hoje: aplicado corrigido pelo CDI desde a data (juros compostos mensais)
+function valorHoje(inv) {
+  const cdi = cdiAtual();
+  if (!cdi || !inv.pctCdi || !inv.data) return null;
+  const meses = Math.max(0, (Date.now() - new Date(inv.data + 'T12:00:00')) / (30.44 * 86400000));
+  return inv.valor * Math.pow(1 + (cdi / 100) * (inv.pctCdi / 100) / 12, meses);
+}
 
 function renderInvestimentos() {
   const lista = dados.investimentos;
   const total = soma(lista);
   const rendaMes = lista.reduce((s, i) => s + (rendimentoMes(i) || 0), 0);
+  const carteiraHoje = lista.reduce((s, i) => s + (valorHoje(i) || i.valor), 0);
   const porPerfil = dados.perfis.map((p) => ({ p, v: soma(lista.filter((i) => i.dono === p.id)) }));
   $('#resumo-invest').innerHTML = `
-    <div class="card-resumo"><div class="rotulo">📈 Total do casal</div><div class="valor pos">${fmtBRL(total)}</div></div>
+    <div class="card-resumo"><div class="rotulo">📈 Total aplicado</div><div class="valor pos">${fmtBRL(total)}</div></div>
+    <div class="card-resumo"><div class="rotulo">🌱 Carteira hoje ≈</div><div class="valor pos">${carteiraHoje > 0 ? fmtBRL(carteiraHoje) : '—'}</div>
+      <div class="extra">${carteiraHoje > total ? '+' + fmtBRL(carteiraHoje - total) + ' de rendimento estimado' : 'corrigido pelo CDI desde cada aporte'}</div></div>
     <div class="card-resumo"><div class="rotulo">💹 Rende ≈ por mês</div><div class="valor pos">${rendaMes > 0 ? fmtBRL(rendaMes) : '—'}</div>
       <div class="extra">${rendaMes > 0 ? 'estimativa com o CDI atual' : 'informe o CDI e o % de cada investimento'}</div></div>
     ${porPerfil.map(({ p, v }) => `
@@ -969,6 +1083,7 @@ function renderInvestimentos() {
   const corpo = $('#tabela-invest tbody');
   corpo.innerHTML = lista.slice().sort((a, b) => b.data.localeCompare(a.data)).map((i) => {
     const rm = rendimentoMes(i);
+    const vh = valorHoje(i);
     return `
     <tr>
       <td>${fmtData(i.data)}</td>
@@ -977,10 +1092,11 @@ function renderInvestimentos() {
       <td>${escapar(primeiroNome(i.dono))}</td>
       <td class="dir">${i.pctCdi ? i.pctCdi.toLocaleString('pt-BR') + '%' : '—'}</td>
       <td class="dir val-pos">${rm ? fmtBRL(rm) : '—'}</td>
-      <td class="dir val-pos">${fmtBRL(i.valor)}</td>
+      <td class="dir">${fmtBRL(i.valor)}</td>
+      <td class="dir val-pos">${vh ? fmtBRL(vh) : '—'}</td>
       <td><button class="btn-lixo" data-id="${i.id}" title="Excluir">🗑</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="8" class="vazio">Nenhum investimento ainda. Comece hoje! 🌱</td></tr>';
+  }).join('') || '<tr><td colspan="9" class="vazio">Nenhum investimento ainda. Comece hoje! 🌱</td></tr>';
   corpo.querySelectorAll('.btn-lixo').forEach((b) => b.addEventListener('click', () => {
     if (confirm('Excluir este investimento?')) {
       dados.investimentos = dados.investimentos.filter((i) => i.id != b.dataset.id);
@@ -1843,6 +1959,386 @@ function configurarTrabalho() {
   });
 }
 
+// ==========================================================
+// IMPORTAÇÃO DE EXTRATO (CSV / OFX)
+// ==========================================================
+const CATS_EXTRATO = {
+  'Mercado': ['MERCADO', 'SUPERMERC', 'ATACAD', 'CARREFOUR', 'ASSAI', 'BISTEK', 'ANGELONI', 'HORTIFRUTI'],
+  'Transporte': ['POSTO', 'COMBUST', 'GASOLINA', 'UBER', '99APP', '99POP', 'ESTACIONAMENTO', 'PEDAGIO', 'ONIBUS'],
+  'Saúde': ['FARMACIA', 'DROGARIA', 'DROGASIL', 'PANVEL', 'HOSPITAL', 'CLINICA', 'LABORAT', 'UNIMED'],
+  'Lazer': ['RESTAURANTE', 'LANCHONETE', 'IFOOD', 'CINEMA', 'NETFLIX', 'SPOTIFY', 'BAR ', 'PIZZARIA', 'HAMBURG'],
+  'Contas (água/luz/internet)': ['ENERGIA', 'CELESC', 'COPEL', 'CEMIG', 'ENEL', 'SANEAMENTO', 'CASAN', 'SANEPAR', 'VIVO', 'CLARO', 'TIM ', 'INTERNET', 'TELEFON'],
+  'Aluguel': ['ALUGUEL', 'IMOBILIARIA', 'CONDOMINIO'],
+  'Educação': ['ESCOLA', 'FACULDADE', 'UNIVERSIDADE', 'CURSO', 'LIVRARIA'],
+  'Cartão de crédito': ['FATURA', 'PAGTO CARTAO', 'PAGAMENTO CARTAO'],
+};
+function categorizarExtrato(desc, tipo) {
+  const n = normalizarTexto(desc);
+  if (tipo === 'entrada') return /SALARIO|PROVENTO|PAGAMENTO REF|REMUNERAC|FOLHA/.test(n) ? 'Salário' : 'Outros';
+  for (const [cat, chaves] of Object.entries(CATS_EXTRATO)) {
+    if (chaves.some((c) => n.includes(c))) return cat;
+  }
+  return 'Outros';
+}
+function parseValorExtrato(c) {
+  if (!/\d/.test(c) || /\d{2}[\/\-]\d{2}/.test(c)) return NaN;
+  let t = c.replace(/[R$\s]/g, '');
+  if (/,\d{1,2}$/.test(t)) t = t.replace(/\./g, '').replace(',', '.'); // formato brasileiro 1.234,56
+  else t = t.replace(/,/g, '');
+  if (!/^[+-]?\d+(\.\d+)?$/.test(t)) return NaN;
+  return parseFloat(t);
+}
+function interpretarOFX(txt) {
+  const trans = [];
+  txt.split(/<STMTTRN>/i).slice(1).forEach((b) => {
+    const pega = (tag) => {
+      const m = b.match(new RegExp('<' + tag + '>([^<\r\n]+)', 'i'));
+      return m ? m[1].trim() : '';
+    };
+    const dt = pega('DTPOSTED').slice(0, 8);
+    const valor = parseFloat(pega('TRNAMT').replace(',', '.'));
+    const desc = pega('MEMO') || pega('NAME') || 'Movimentação';
+    if (dt.length === 8 && isFinite(valor) && valor !== 0) {
+      trans.push({
+        data: `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)}`,
+        valor: Math.abs(valor), tipo: valor > 0 ? 'entrada' : 'saida', desc,
+      });
+    }
+  });
+  return trans;
+}
+function interpretarCSVExtrato(txt) {
+  const trans = [];
+  const sep = ((txt.match(/;/g) || []).length >= (txt.match(/,/g) || []).length) ? ';' : ',';
+  txt.split(/\r?\n/).forEach((linha) => {
+    if (!linha.trim()) return;
+    const celulas = linha.split(sep).map((c) => c.replace(/^"|"$/g, '').trim());
+    let data = null, valor = null; const textos = [];
+    celulas.forEach((c) => {
+      let m = c.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+      if (m && !data) { data = `${m[3]}-${m[2]}-${m[1]}`; return; }
+      m = c.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m && !data) { data = `${m[1]}-${m[2]}-${m[3]}`; return; }
+      if (valor === null) {
+        const v = parseValorExtrato(c);
+        if (isFinite(v)) { valor = v; return; }
+      }
+      if (/[A-Za-zÀ-ú]{3,}/.test(c)) textos.push(c);
+    });
+    if (data && valor !== null && isFinite(valor) && valor !== 0) {
+      trans.push({
+        data, valor: Math.abs(valor), tipo: valor > 0 ? 'entrada' : 'saida',
+        desc: (textos.join(' ') || 'Movimentação').slice(0, 80),
+      });
+    }
+  });
+  return trans;
+}
+
+let extratoPrevia = [];
+function processarExtrato(arquivo) {
+  const leitor = new FileReader();
+  leitor.onload = () => {
+    const txt = String(leitor.result);
+    const trans = /<OFX|<STMTTRN/i.test(txt) ? interpretarOFX(txt) : interpretarCSVExtrato(txt);
+    if (!trans.length) {
+      alert('Não consegui entender esse arquivo. 😕\nExporte o extrato em CSV ou OFX pelo app do banco e tente de novo.');
+      return;
+    }
+    trans.forEach((t) => {
+      t.cat = categorizarExtrato(t.desc, t.tipo);
+      t.dup = dados.lancamentos.some((l) => l.data === t.data && Math.abs(l.valor - t.valor) < 0.005);
+      t.incluir = !t.dup;
+    });
+    extratoPrevia = trans;
+    renderExtratoPrevia();
+  };
+  leitor.readAsText(arquivo);
+}
+function renderExtratoPrevia() {
+  const alvo = $('#extrato-previa');
+  if (!extratoPrevia.length) { alvo.innerHTML = ''; return; }
+  alvo.innerHTML = `
+    <div class="tabela-scroll"><table class="tabela">
+      <thead><tr><th></th><th>Data</th><th>Descrição</th><th>Categoria</th><th class="dir">Valor</th></tr></thead>
+      <tbody>${extratoPrevia.map((t, i) => `
+        <tr class="${t.dup ? 'pausado' : ''}">
+          <td><input type="checkbox" data-i="${i}" class="ext-check" ${t.incluir ? 'checked' : ''}></td>
+          <td>${fmtData(t.data)}</td>
+          <td>${escapar(t.desc)}${t.dup ? ' <span class="chip-cat">possível duplicado</span>' : ''}</td>
+          <td><select data-i="${i}" class="ext-cat">
+            ${(t.tipo === 'entrada' ? CATEGORIAS_ENTRADA : dados.categorias).map((c) => `<option ${c === t.cat ? 'selected' : ''}>${c}</option>`).join('')}
+          </select></td>
+          <td class="dir ${t.tipo === 'entrada' ? 'val-pos' : 'val-neg'}">${t.tipo === 'entrada' ? '+' : '−'} ${fmtBRL(t.valor)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>
+    <div class="revisao-rodape">
+      <div class="campo" style="max-width:220px"><label>Lançar para</label><select id="ext-perfil">
+        ${dados.perfis.map((p) => `<option value="${p.id}" ${p.id === perfilAtivo ? 'selected' : ''}>${escapar(p.nome)}</option>`).join('')}
+      </select></div>
+      <div class="linha-botoes">
+        <button id="btn-ext-cancelar" class="btn-secundario" type="button">Cancelar</button>
+        <button id="btn-ext-importar" class="btn-principal" type="button">📥 Importar selecionados</button>
+      </div>
+    </div>`;
+  alvo.querySelectorAll('.ext-check').forEach((c) => c.addEventListener('change', () => { extratoPrevia[+c.dataset.i].incluir = c.checked; }));
+  alvo.querySelectorAll('.ext-cat').forEach((s) => s.addEventListener('change', () => { extratoPrevia[+s.dataset.i].cat = s.value; }));
+  $('#btn-ext-cancelar').addEventListener('click', () => { extratoPrevia = []; alvo.innerHTML = ''; $('#ext-arquivo').value = ''; });
+  $('#btn-ext-importar').addEventListener('click', () => {
+    const perfil = $('#ext-perfil').value;
+    const escolhidos = extratoPrevia.filter((t) => t.incluir);
+    if (!escolhidos.length) { alert('Marque pelo menos uma movimentação.'); return; }
+    escolhidos.forEach((t) => dados.lancamentos.push({
+      id: novoId(), tipo: t.tipo, desc: t.desc, cat: t.cat, valor: t.valor, data: t.data, perfil, pag: 'Extrato importado',
+    }));
+    salvar();
+    extratoPrevia = []; alvo.innerHTML = ''; $('#ext-arquivo').value = '';
+    alert(`${escolhidos.length} lançamentos importados! ✅`);
+    renderTudo();
+  });
+}
+
+// ==========================================================
+// AVISOS DE FATURAS (dashboard)
+// ==========================================================
+function avisosFaturas() {
+  const avisos = [];
+  const hoje0 = new Date(); hoje0.setHours(0, 0, 0, 0);
+  const diasAte = (diaAlvo) => {
+    const ult = (a, m) => new Date(a, m + 1, 0).getDate();
+    let d = new Date(hoje0.getFullYear(), hoje0.getMonth(), Math.min(diaAlvo, ult(hoje0.getFullYear(), hoje0.getMonth())));
+    if (d < hoje0) d = new Date(hoje0.getFullYear(), hoje0.getMonth() + 1, Math.min(diaAlvo, ult(hoje0.getFullYear(), hoje0.getMonth() + 1)));
+    return Math.round((d - hoje0) / 86400000);
+  };
+  const quando = (n) => n === 0 ? 'HOJE' : n === 1 ? 'amanhã' : `em ${n} dias`;
+  dados.cartoes.forEach((c) => {
+    const f = diasAte(c.fecha);
+    if (f <= 5) avisos.push(`💳 ${c.nome} fecha ${quando(f)}`);
+    const v = diasAte(c.vence);
+    if (v <= 5) avisos.push(`💰 Fatura ${c.nome} vence ${quando(v)}`);
+  });
+  return avisos;
+}
+
+// ==========================================================
+// RELATÓRIO DO MÊS (imprimir / salvar em PDF)
+// ==========================================================
+function gerarRelatorio() {
+  const lanc = lancDoMes(mesRef, 'todos');
+  const entradas = soma(lanc.filter((l) => l.tipo === 'entrada'));
+  const saidas = soma(lanc.filter((l) => l.tipo === 'saida'));
+  const porCat = {};
+  lanc.filter((l) => l.tipo === 'saida').forEach((l) => { porCat[l.cat] = (porCat[l.cat] || 0) + l.valor; });
+  const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+  const dividas = [...dados.emprestimos.map((e) => ({ ...e, ic: 'Empréstimo' })), ...dados.crediarios.map((c) => ({ ...c, ic: 'Crediário' }))];
+
+  $('#relatorio').innerHTML = `
+    <h1>💰 Controle Financeiro Brum</h1>
+    <p class="rel-sub">Relatório de ${rotuloMes(mesRef)} — gerado em ${fmtData(new Date().toISOString().slice(0, 10))}</p>
+    <div class="rel-kpis">
+      <div class="rel-kpi"><small>Entradas</small><strong>${fmtBRL(entradas)}</strong></div>
+      <div class="rel-kpi"><small>Saídas</small><strong>${fmtBRL(saidas)}</strong></div>
+      <div class="rel-kpi"><small>Saldo</small><strong>${fmtBRL(entradas - saidas)}</strong></div>
+      <div class="rel-kpi"><small>Investido (total)</small><strong>${fmtBRL(soma(dados.investimentos))}</strong></div>
+    </div>
+    <h2>Saídas por categoria</h2>
+    <table><thead><tr><th>Categoria</th><th class="dir">Valor</th><th class="dir">% das saídas</th></tr></thead><tbody>
+      ${cats.map(([c, v]) => `<tr><td>${escapar(c)}</td><td class="dir">${fmtBRL(v)}</td><td class="dir">${saidas > 0 ? fmtPct((v / saidas) * 100) : '—'}</td></tr>`).join('') || '<tr><td colspan="3">Sem saídas no mês.</td></tr>'}
+    </tbody></table>
+    <h2>Lançamentos do mês (${lanc.length})</h2>
+    <table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Quem</th><th class="dir">Valor</th></tr></thead><tbody>
+      ${[...lanc].sort((a, b) => a.data.localeCompare(b.data)).map((l) => `
+        <tr><td>${fmtData(l.data)}</td><td>${escapar(l.desc)}</td><td>${escapar(l.cat)}</td>
+        <td>${escapar(primeiroNome(l.perfil))}</td><td class="dir">${l.tipo === 'entrada' ? '+' : '−'} ${fmtBRL(l.valor)}</td></tr>`).join('')}
+    </tbody></table>
+    ${dividas.length ? `<h2>Dívidas em aberto</h2>
+    <table><thead><tr><th>Tipo</th><th>Descrição</th><th class="dir">Pago</th><th class="dir">Restante</th></tr></thead><tbody>
+      ${dividas.map((d) => `<tr><td>${d.ic}</td><td>${escapar(d.desc)}</td><td class="dir">${fmtBRL(d.pago)}</td><td class="dir">${fmtBRL(Math.max(d.total - d.pago, 0))}</td></tr>`).join('')}
+    </tbody></table>` : ''}`;
+
+  document.body.classList.add('imprimindo');
+  window.print();
+}
+
+// ==========================================================
+// COMPARATIVO ANUAL
+// ==========================================================
+function renderAnual() {
+  const sel = $('#anual-ano');
+  const anoAtualStr = String(new Date().getFullYear());
+  const anos = [...new Set(dados.lancamentos.map((l) => l.data.slice(0, 4)))].sort().reverse();
+  if (!anos.includes(anoAtualStr)) anos.unshift(anoAtualStr);
+  const escolhido = anos.includes(sel.value) ? sel.value : anoAtualStr;
+  sel.innerHTML = anos.map((a) => `<option ${a === escolhido ? 'selected' : ''}>${a}</option>`).join('');
+
+  const doAno = dados.lancamentos.filter((l) =>
+    l.data.startsWith(escolhido) && (filtroPerfil === 'todos' || l.perfil === filtroPerfil));
+  const entradas = soma(doAno.filter((l) => l.tipo === 'entrada'));
+  const saidas = soma(doAno.filter((l) => l.tipo === 'saida'));
+
+  const porMes = [];
+  for (let m = 1; m <= 12; m++) {
+    const ym = `${escolhido}-${String(m).padStart(2, '0')}`;
+    const ml = doAno.filter((l) => l.data.startsWith(ym));
+    porMes.push({ ym, ent: soma(ml.filter((l) => l.tipo === 'entrada')), sai: soma(ml.filter((l) => l.tipo === 'saida')), tem: ml.length > 0 });
+  }
+  const comMov = porMes.filter((m) => m.tem);
+  const melhor = comMov.length ? comMov.reduce((a, b) => (a.ent - a.sai) >= (b.ent - b.sai) ? a : b) : null;
+  const pior = comMov.length ? comMov.reduce((a, b) => (a.ent - a.sai) <= (b.ent - b.sai) ? a : b) : null;
+
+  const dividasRestante = [...dados.emprestimos, ...dados.crediarios].reduce((s, e) => s + Math.max(e.total - e.pago, 0), 0);
+  const patrimonioBase = soma(dados.investimentos) - dividasRestante;
+  const patrimonio = cofreLiberado ? patrimonioBase + saldoCofre() : patrimonioBase;
+
+  $('#anual-cards').innerHTML = `
+    <div class="card-resumo"><div class="rotulo">⬆ Entradas em ${escolhido}</div><div class="valor pos">${fmtBRL(entradas)}</div></div>
+    <div class="card-resumo"><div class="rotulo">⬇ Saídas em ${escolhido}</div><div class="valor neg">${fmtBRL(saidas)}</div></div>
+    <div class="card-resumo"><div class="rotulo">💼 Saldo do ano</div><div class="valor ${entradas - saidas >= 0 ? 'pos' : 'neg'}">${fmtBRL(entradas - saidas)}</div>
+      <div class="extra">${entradas > 0 ? fmtPct(((entradas - saidas) / entradas) * 100) + ' economizado' : '—'}</div></div>
+    <div class="card-resumo"><div class="rotulo">🏆 Melhor mês</div><div class="valor pos">${melhor ? rotuloMes(melhor.ym) : '—'}</div>
+      <div class="extra">${melhor ? 'saldo de ' + fmtBRL(melhor.ent - melhor.sai) : ''}</div></div>
+    <div class="card-resumo"><div class="rotulo">📉 Mês mais apertado</div><div class="valor neg">${pior ? rotuloMes(pior.ym) : '—'}</div>
+      <div class="extra">${pior ? 'saldo de ' + fmtBRL(pior.ent - pior.sai) : ''}</div></div>
+    <div class="card-resumo"><div class="rotulo">🏦 Patrimônio (investido − dívidas)</div>
+      <div class="valor ${patrimonio >= 0 ? 'pos' : 'neg'}">${fmtBRL(patrimonio)}</div>
+      <div class="extra">${cofreLiberado ? 'incluindo o cofre' : 'sem o cofre (🔒 bloqueado)'}</div></div>`;
+
+  // Barras de saldo mês a mês
+  const alvo = $('#anual-barras');
+  const maxAbs = Math.max(...porMes.map((m) => Math.abs(m.ent - m.sai)), 1);
+  const W = 560, H = 240, mx = 50, meio = (H - 30) / 2 + 10;
+  const lb = (W - mx - 10) / 12 - 8;
+  let barras = '', eixo = '';
+  porMes.forEach((m, i) => {
+    const saldo = m.ent - m.sai;
+    const h = Math.abs(saldo) / maxAbs * (meio - 16);
+    const x0 = mx + i * ((W - mx - 10) / 12) + 4;
+    if (m.tem) {
+      barras += `<rect class="marca-hover" x="${x0}" y="${saldo >= 0 ? meio - h : meio}" width="${lb}" height="${Math.max(h, 2)}" rx="3"
+        fill="${saldo >= 0 ? '#0ca30c' : '#d03b3b'}" data-ym="${m.ym}" data-ent="${m.ent}" data-sai="${m.sai}"/>`;
+    }
+    eixo += `<text x="${x0 + lb / 2}" y="${H - 8}" text-anchor="middle" font-size="9" fill="var(--texto-mudo)">${NOMES_MES[i]}</text>`;
+  });
+  alvo.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Saldo mês a mês do ano">
+      <line x1="${mx}" y1="${meio}" x2="${W - 8}" y2="${meio}" stroke="var(--texto-mudo)" stroke-dasharray="3 3"/>
+      ${barras}${eixo}
+    </svg>`;
+  alvo.querySelectorAll('rect').forEach((el) => {
+    el.addEventListener('mousemove', (ev) => mostrarTooltip(ev, `
+      <strong>${rotuloMes(el.dataset.ym)}</strong>
+      <div class="tt-linha">Entradas: ${fmtBRL(+el.dataset.ent)}</div>
+      <div class="tt-linha">Saídas: ${fmtBRL(+el.dataset.sai)}</div>
+      <div class="tt-linha">Saldo: ${fmtBRL(+el.dataset.ent - +el.dataset.sai)}</div>`));
+    el.addEventListener('mouseleave', esconderTooltip);
+  });
+
+  // Categorias do ano
+  const porCat = {};
+  doAno.filter((l) => l.tipo === 'saida').forEach((l) => { porCat[l.cat] = (porCat[l.cat] || 0) + l.valor; });
+  const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+  const cores = coresSeries();
+  $('#anual-categorias').innerHTML = cats.length ? cats.map(([cat, v], i) => `
+    <div class="barra-cat">
+      <div class="prog-info"><span>${escapar(cat)}</span><span>${fmtBRL(v)} · <strong>${fmtPct((v / saidas) * 100)}</strong></span></div>
+      <div class="progresso"><div style="width:${(v / cats[0][1]) * 100}%; background:${cores[i % 8]}"></div></div>
+    </div>`).join('') : '<p class="vazio">Sem saídas neste ano.</p>';
+}
+
+// ==========================================================
+// PIN DE ENTRADA
+// ==========================================================
+function renderPin() {
+  const alvo = $('#pin-botoes');
+  alvo.innerHTML = dados.pin
+    ? `<span class="selo-status">🔐 PIN ativo</span>
+       <button id="btn-pin-trocar" class="btn-secundario">🔑 Trocar PIN</button>
+       <button id="btn-pin-remover" class="btn-perigo">Remover PIN</button>`
+    : `<button id="btn-pin-criar" class="btn-principal">🔐 Criar PIN</button>`;
+  const pedirNovo = async () => {
+    const p1 = prompt('Crie um PIN de 4 a 6 números:');
+    if (!p1) return null;
+    if (!/^\d{4,6}$/.test(p1)) { alert('O PIN precisa ter de 4 a 6 números.'); return null; }
+    const p2 = prompt('Digite o PIN de novo para confirmar:');
+    if (p1 !== p2) { alert('Os PINs não conferem.'); return null; }
+    return hashSenha('pin:' + p1);
+  };
+  const conferirAtual = async () => {
+    const p = prompt('Digite o PIN atual:');
+    if (p === null) return false;
+    if (await hashSenha('pin:' + p) === dados.pin) return true;
+    alert('PIN incorreto. ❌'); return false;
+  };
+  if ($('#btn-pin-criar')) $('#btn-pin-criar').addEventListener('click', async () => {
+    const h = await pedirNovo();
+    if (h) { dados.pin = h; salvar(); alert('PIN criado! 🔐 Será pedido sempre que abrir o site.'); renderPin(); }
+  });
+  if ($('#btn-pin-trocar')) $('#btn-pin-trocar').addEventListener('click', async () => {
+    if (!(await conferirAtual())) return;
+    const h = await pedirNovo();
+    if (h) { dados.pin = h; salvar(); alert('PIN trocado! ✅'); }
+  });
+  if ($('#btn-pin-remover')) $('#btn-pin-remover').addEventListener('click', async () => {
+    if (!(await conferirAtual())) return;
+    dados.pin = null; salvar(); renderPin();
+  });
+}
+function exigirPin() {
+  return new Promise((res) => {
+    const tela = $('#tela-pin'), campo = $('#pin-campo'), erro = $('#pin-erro');
+    tela.classList.remove('oculto');
+    campo.focus();
+    campo.addEventListener('input', async () => {
+      if (campo.value.length < 4) return;
+      if (await hashSenha('pin:' + campo.value) === dados.pin) {
+        tela.classList.add('oculto');
+        campo.value = ''; erro.textContent = '';
+        res();
+      } else if (campo.value.length >= 6) {
+        erro.textContent = 'PIN incorreto — tente de novo';
+        campo.value = '';
+      }
+    });
+  });
+}
+
+// ==========================================================
+// SIMULADOR DE QUITAÇÃO
+// ==========================================================
+function preencherSimulador() {
+  const sel = $('#sim-divida');
+  const atual = sel.value;
+  sel.innerHTML = '';
+  [...dados.emprestimos.map((e) => ({ ...e, ic: '🤝' })), ...dados.crediarios.map((c) => ({ ...c, ic: '🧾' }))]
+    .filter((d) => d.total - d.pago > 0.005)
+    .forEach((d) => sel.appendChild(new Option(`${d.ic} ${d.desc} — falta ${fmtBRL(d.total - d.pago)}`, d.id)));
+  if (atual && [...sel.options].some((o) => o.value === atual)) sel.value = atual;
+}
+function simularQuitacao() {
+  const id = $('#sim-divida').value;
+  const d = [...dados.emprestimos, ...dados.crediarios].find((x) => x.id == id);
+  const mensal = parseFloat($('#sim-mensal').value);
+  const extra = parseFloat($('#sim-extra').value) || 0;
+  if (!d || !(mensal > 0)) { alert('Escolha a dívida e informe quanto paga por mês.'); return; }
+  const restante = d.total - d.pago;
+  const m1 = Math.ceil(restante / mensal);
+  const m2 = Math.ceil(restante / (mensal + extra));
+  const dataFim = (n) => {
+    const dt = new Date(); dt.setMonth(dt.getMonth() + n);
+    return rotuloMes(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`);
+  };
+  $('#sim-resultado').innerHTML = `
+    <div class="sim-caixa">
+      Pagando <strong>${fmtBRL(mensal)}</strong> por mês, <strong>${escapar(d.desc)}</strong> é quitado em
+      <strong>${m1} ${m1 === 1 ? 'mês' : 'meses'}</strong> (${dataFim(m1)}).<br>
+      ${extra > 0
+        ? `Com <strong>+${fmtBRL(extra)}</strong> por mês: <strong>${m2} ${m2 === 1 ? 'mês' : 'meses'}</strong> (${dataFim(m2)})
+           — termina <strong class="delta-pos">${m1 - m2} ${m1 - m2 === 1 ? 'mês' : 'meses'} antes</strong>! 🎉`
+        : 'Preencha o valor extra para ver quanto tempo você ganharia pagando um pouco a mais.'}
+    </div>`;
+}
+
 // ---------- Navegação por abas ----------
 function configurarAbas() {
   document.querySelectorAll('.aba').forEach((b) => b.addEventListener('click', () => {
@@ -1870,12 +2366,25 @@ function renderTudo() {
   renderOrcamentos();
   renderTrabalho();
   renderConfig();
+  renderRecorrentes();
+  renderAnual();
+  renderPin();
+  preencherSimulador();
 }
 
 // ---------- Inicialização ----------
-function iniciar() {
+async function iniciar() {
   aplicarTema(localStorage.getItem(CHAVE_TEMA) ||
     (matchMedia('(prefers-color-scheme: dark)').matches ? 'escuro' : 'claro'));
+
+  // PIN de entrada (se configurado)
+  if (dados.pin) {
+    $('#tela-login').classList.add('oculto');
+    await exigirPin();
+    $('#tela-login').classList.remove('oculto');
+  }
+
+  materializarRecorrentes();
 
   $('#btn-tema').addEventListener('click', alternarTema);
   $('#btn-sair').addEventListener('click', sair);
@@ -1897,6 +2406,20 @@ function iniciar() {
   configurarTrabalho();
   $('#tb-mes').value = new Date().toISOString().slice(0, 7);
   configurarCofre();
+
+  // Relatório do mês (imprimir / PDF)
+  $('#btn-relatorio').addEventListener('click', gerarRelatorio);
+  window.addEventListener('afterprint', () => document.body.classList.remove('imprimindo'));
+
+  // Importação de extrato
+  $('#btn-extrato').addEventListener('click', () => $('#ext-arquivo').click());
+  $('#ext-arquivo').addEventListener('change', () => {
+    if ($('#ext-arquivo').files[0]) processarExtrato($('#ext-arquivo').files[0]);
+  });
+
+  // Comparativo anual e simulador
+  $('#anual-ano').addEventListener('change', renderAnual);
+  $('#btn-simular').addEventListener('click', simularQuitacao);
 
   // Modo TV
   $('#btn-tv').addEventListener('click', alternarTV);
