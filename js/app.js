@@ -58,15 +58,31 @@ function adicionarExemplosTrabalho(d) {
     return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
   };
   d.salarios.push(
-    { id: 9171, demo: true, perfil: 'darci', mes: mes(2), bruto: 3500, liquido: 3012.5, fgts: 280, obs: '' },
-    { id: 9172, demo: true, perfil: 'darci', mes: mes(1), bruto: 3500, liquido: 3012.5, fgts: 280, obs: '' },
-    { id: 9173, demo: true, perfil: 'darci', mes: mes(0), bruto: 3850, liquido: 3290, fgts: 308, obs: 'Aumento de 10% 🎉' },
-    { id: 9174, demo: true, perfil: 'jamylli', mes: mes(2), bruto: 2800, liquido: 2464, fgts: 224, obs: '' },
-    { id: 9175, demo: true, perfil: 'jamylli', mes: mes(1), bruto: 2800, liquido: 2464, fgts: 224, obs: '' },
-    { id: 9176, demo: true, perfil: 'jamylli', mes: mes(0), bruto: 2800, liquido: 2464, fgts: 224, obs: '' },
+    { id: 9171, demo: true, perfil: 'darci', tipo: 'salario', mes: mes(2), bruto: 3500, liquido: 3012.5, fgts: 280, obs: '' },
+    { id: 9172, demo: true, perfil: 'darci', tipo: 'salario', mes: mes(1), bruto: 3500, liquido: 3012.5, fgts: 280, obs: '' },
+    { id: 9173, demo: true, perfil: 'darci', tipo: 'salario', mes: mes(0), bruto: 3850, liquido: 3290, fgts: 308, obs: 'Aumento de 10% 🎉' },
+    { id: 9174, demo: true, perfil: 'jamylli', tipo: 'salario', mes: mes(2), bruto: 2800, liquido: 2464, fgts: 224, obs: '' },
+    { id: 9175, demo: true, perfil: 'jamylli', tipo: 'salario', mes: mes(1), bruto: 2800, liquido: 2464, fgts: 224, obs: '' },
+    { id: 9176, demo: true, perfil: 'jamylli', tipo: 'salario', mes: mes(0), bruto: 2800, liquido: 2464, fgts: 224, obs: '' },
   );
+  adicionarExemplosFeriasDecimo(d);
   d.proximoId = Math.max(d.proximoId || 100, 9200);
   d.exemplosV3 = true;
+}
+
+// Exemplos de férias e 13º (flag demo:true)
+function adicionarExemplosFeriasDecimo(d) {
+  const hoje = new Date();
+  const mes = (recuo) => {
+    const dt = new Date(hoje.getFullYear(), hoje.getMonth() - recuo, 1);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+  };
+  d.salarios.push(
+    { id: 9177, demo: true, perfil: 'darci', tipo: 'decimo', mes: mes(1), bruto: 1925, liquido: 1750, fgts: 154, obs: '1ª parcela do 13º' },
+    { id: 9178, demo: true, perfil: 'jamylli', tipo: 'ferias', mes: mes(2), bruto: 3733.33, liquido: 3200, fgts: 298.67, obs: 'Férias com 1/3' },
+  );
+  d.proximoId = Math.max(d.proximoId || 100, 9200);
+  d.exemplosV4 = true;
 }
 
 // Exemplos (flag demo:true) para mostrar como fica na vida real —
@@ -138,6 +154,8 @@ function carregar() {
       if (!d.exemplosV2) adicionarExemplos(d);
       if (!d.salarios) d.salarios = [];
       if (!d.exemplosV3) adicionarExemplosTrabalho(d);
+      d.salarios.forEach((s) => { if (!s.tipo) s.tipo = 'salario'; });
+      if (!d.exemplosV4) adicionarExemplosFeriasDecimo(d);
       return d;
     }
   } catch (e) { /* dados corrompidos: recomeça */ }
@@ -1621,6 +1639,8 @@ function configurarMercado() {
 // ==========================================================
 // TRABALHO — registro de salários (bruto, líquido, FGTS)
 // ==========================================================
+const TIPOS_TRAB = { salario: '💼 Salário', ferias: '🏖 Férias', decimo: '🎁 13º' };
+
 function renderTrabalho() {
   const lista = dados.salarios;
 
@@ -1634,27 +1654,37 @@ function renderTrabalho() {
         <div class="valor">—</div><div class="extra">nenhum registro ainda</div></div>`;
       return;
     }
-    const atual = meus[meus.length - 1];
-    const primeiro = meus[0];
-    const evol = primeiro.liquido > 0 ? ((atual.liquido - primeiro.liquido) / primeiro.liquido) * 100 : 0;
+    const salariosMensais = meus.filter((s) => s.tipo === 'salario');
+    const atual = salariosMensais[salariosMensais.length - 1];
+    const primeiro = salariosMensais[0];
+    const evol = primeiro && primeiro.liquido > 0 ? ((atual.liquido - primeiro.liquido) / primeiro.liquido) * 100 : 0;
     const fgtsAcum = meus.reduce((s, x) => s + (x.fgts || 0), 0);
-    const liqAno = meus.filter((x) => x.mes.startsWith(anoAtual)).reduce((s, x) => s + x.liquido, 0);
+    const doAno = meus.filter((x) => x.mes.startsWith(anoAtual));
+    const liqAno = doAno.reduce((s, x) => s + x.liquido, 0);
+    const extrasAno = doAno.filter((x) => x.tipo !== 'salario');
+    const liqExtras = extrasAno.reduce((s, x) => s + x.liquido, 0);
     cardsHtml += `
       <div class="card-resumo">
         <div class="rotulo"><span style="color:${p.cor}">●</span> ${escapar(primeiroNome(p.id))} · salário atual</div>
-        <div class="valor">${fmtBRL(atual.liquido)}</div>
-        <div class="extra">${Math.abs(evol) < 0.05 ? 'sem variação desde ' + rotuloMes(primeiro.mes)
+        <div class="valor">${atual ? fmtBRL(atual.liquido) : '—'}</div>
+        <div class="extra">${!atual || !primeiro ? 'sem salário mensal registrado'
+          : Math.abs(evol) < 0.05 ? 'sem variação desde ' + rotuloMes(primeiro.mes)
           : `<span class="${evol >= 0 ? 'delta-pos' : 'delta-neg'}">${evol >= 0 ? '▲' : '▼'} ${fmtPct(Math.abs(evol))}</span> desde ${rotuloMes(primeiro.mes)}`}</div>
       </div>
       <div class="card-resumo">
         <div class="rotulo"><span style="color:${p.cor}">●</span> ${escapar(primeiroNome(p.id))} · FGTS somado</div>
         <div class="valor pos">${fmtBRL(fgtsAcum)}</div>
-        <div class="extra">${meus.length} ${meus.length === 1 ? 'mês registrado' : 'meses registrados'}</div>
+        <div class="extra">${meus.length} ${meus.length === 1 ? 'registro' : 'registros'} (salário + férias + 13º)</div>
       </div>
       <div class="card-resumo">
         <div class="rotulo"><span style="color:${p.cor}">●</span> ${escapar(primeiroNome(p.id))} · líquido em ${anoAtual}</div>
         <div class="valor">${fmtBRL(liqAno)}</div>
         <div class="extra">soma automática do ano</div>
+      </div>
+      <div class="card-resumo">
+        <div class="rotulo"><span style="color:${p.cor}">●</span> ${escapar(primeiroNome(p.id))} · férias + 13º em ${anoAtual}</div>
+        <div class="valor pos">${fmtBRL(liqExtras)}</div>
+        <div class="extra">${extrasAno.length ? extrasAno.map((x) => TIPOS_TRAB[x.tipo]).join(' · ') : 'nada recebido ainda'}</div>
       </div>`;
   });
   $('#trabalho-cards').innerHTML = cardsHtml;
@@ -1665,18 +1695,23 @@ function renderTrabalho() {
   const corpo = $('#tabela-trabalho tbody');
   const ordenada = [...lista].sort((a, b) => b.mes.localeCompare(a.mes) || a.perfil.localeCompare(b.perfil));
   corpo.innerHTML = ordenada.map((s) => {
-    const anteriores = lista.filter((x) => x.perfil === s.perfil && x.mes < s.mes).sort((a, b) => b.mes.localeCompare(a.mes));
-    const ant = anteriores[0];
-    let variacao = '<span class="chip-cat">primeiro registro</span>';
-    if (ant && ant.liquido > 0) {
-      const v = ((s.liquido - ant.liquido) / ant.liquido) * 100;
-      variacao = Math.abs(v) < 0.05 ? '='
-        : `<span class="${v > 0 ? 'delta-pos' : 'delta-neg'}">${v > 0 ? '▲' : '▼'} ${fmtPct(Math.abs(v))}</span>`;
+    let variacao = '—';
+    if (s.tipo === 'salario') {
+      const anteriores = lista.filter((x) => x.perfil === s.perfil && x.tipo === 'salario' && x.mes < s.mes)
+        .sort((a, b) => b.mes.localeCompare(a.mes));
+      const ant = anteriores[0];
+      variacao = '<span class="chip-cat">primeiro registro</span>';
+      if (ant && ant.liquido > 0) {
+        const v = ((s.liquido - ant.liquido) / ant.liquido) * 100;
+        variacao = Math.abs(v) < 0.05 ? '='
+          : `<span class="${v > 0 ? 'delta-pos' : 'delta-neg'}">${v > 0 ? '▲' : '▼'} ${fmtPct(Math.abs(v))}</span>`;
+      }
     }
     return `
       <tr>
         <td>${rotuloMes(s.mes)}</td>
         <td>${escapar(primeiroNome(s.perfil))}</td>
+        <td><span class="chip-cat">${TIPOS_TRAB[s.tipo] || TIPOS_TRAB.salario}</span></td>
         <td class="dir">${fmtBRL(s.bruto)}</td>
         <td class="dir val-neg">− ${fmtBRL(Math.max(s.bruto - s.liquido, 0))}</td>
         <td class="dir val-pos">${fmtBRL(s.liquido)}</td>
@@ -1685,7 +1720,7 @@ function renderTrabalho() {
         <td>${escapar(s.obs || '')}</td>
         <td><button class="btn-lixo" data-id="${s.id}" title="Excluir">🗑</button></td>
       </tr>`;
-  }).join('') || '<tr><td colspan="9" class="vazio">Nenhum salário registrado ainda.</td></tr>';
+  }).join('') || '<tr><td colspan="10" class="vazio">Nenhum salário registrado ainda.</td></tr>';
 
   const fgtsTotal = lista.reduce((s, x) => s + (x.fgts || 0), 0);
   $('#trabalho-resumo').textContent = lista.length
@@ -1727,7 +1762,8 @@ function renderGraficoTrabalho() {
 
   let linhas = '', pontos = '';
   dados.perfis.forEach((p) => {
-    const meus = meses.map((m) => lista.find((s) => s.perfil === p.id && s.mes === m) || null);
+    // linha: só o salário mensal (férias/13º viram marcadores avulsos)
+    const meus = meses.map((m) => lista.find((s) => s.perfil === p.id && s.mes === m && s.tipo === 'salario') || null);
     let caminho = '', ligado = false;
     meus.forEach((s, i) => {
       if (!s) { ligado = false; return; }
@@ -1735,11 +1771,20 @@ function renderGraficoTrabalho() {
       ligado = true;
       pontos += `<circle class="marca-hover" cx="${x(i).toFixed(1)}" cy="${y(s.liquido).toFixed(1)}" r="5.5"
         fill="${p.cor}" stroke="var(--superficie)" stroke-width="2"
-        data-nome="${escapar(primeiroNome(p.id))}" data-mes="${s.mes}" data-bruto="${s.bruto}"
+        data-tipo="salario" data-nome="${escapar(primeiroNome(p.id))}" data-mes="${s.mes}" data-bruto="${s.bruto}"
         data-liq="${s.liquido}" data-fgts="${s.fgts || 0}" data-obs="${escapar(s.obs || '')}"/>`;
       if (s.obs) pontos += `<text x="${x(i).toFixed(1)}" y="${(y(s.liquido) - 12).toFixed(1)}" text-anchor="middle" font-size="11">⭐</text>`;
     });
     if (caminho) linhas += `<path d="${caminho}" fill="none" stroke="${p.cor}" stroke-width="2.5" stroke-linejoin="round"/>`;
+
+    // marcadores de férias e 13º
+    lista.filter((s) => s.perfil === p.id && s.tipo !== 'salario').forEach((s) => {
+      const i = meses.indexOf(s.mes);
+      if (i < 0) return;
+      pontos += `<text class="marca-hover" x="${x(i).toFixed(1)}" y="${(y(s.liquido) + 5).toFixed(1)}" text-anchor="middle" font-size="15"
+        data-tipo="${s.tipo}" data-nome="${escapar(primeiroNome(p.id))}" data-mes="${s.mes}" data-bruto="${s.bruto}"
+        data-liq="${s.liquido}" data-fgts="${s.fgts || 0}" data-obs="${escapar(s.obs || '')}">${s.tipo === 'ferias' ? '🏖' : '🎁'}</text>`;
+    });
   });
 
   alvo.innerHTML = `
@@ -1748,12 +1793,12 @@ function renderGraficoTrabalho() {
     </svg>
     <div class="legenda">
       ${dados.perfis.map((p) => `<span class="legenda-item"><span class="legenda-cor" style="background:${p.cor}"></span> ${escapar(primeiroNome(p.id))}</span>`).join('')}
-      <span class="legenda-item">⭐ = mês com observação (aumento, promoção...)</span>
+      <span class="legenda-item">⭐ = aumento/promoção · 🏖 = férias · 🎁 = 13º</span>
     </div>`;
 
-  alvo.querySelectorAll('circle').forEach((el) => {
+  alvo.querySelectorAll('.marca-hover').forEach((el) => {
     el.addEventListener('mousemove', (ev) => mostrarTooltip(ev, `
-      <strong>${el.dataset.nome} — ${rotuloMes(el.dataset.mes)}</strong>
+      <strong>${el.dataset.nome} — ${TIPOS_TRAB[el.dataset.tipo] || ''} ${rotuloMes(el.dataset.mes)}</strong>
       <div class="tt-linha">Bruto: ${fmtBRL(+el.dataset.bruto)}</div>
       <div class="tt-linha">Descontos: ${fmtBRL(Math.max(+el.dataset.bruto - +el.dataset.liq, 0))}</div>
       <div class="tt-linha">Líquido: ${fmtBRL(+el.dataset.liq)}</div>
@@ -1777,17 +1822,18 @@ function configurarTrabalho() {
   $('#form-trabalho').addEventListener('submit', (e) => {
     e.preventDefault();
     const perfil = $('#tb-perfil').value;
+    const tipo = $('#tb-tipo').value;
     const mes = $('#tb-mes').value;
     const bruto = parseFloat($('#tb-bruto').value);
     const liquido = parseFloat($('#tb-liquido').value);
     const fgts = parseFloat($('#tb-fgts').value) || +(bruto * 0.08).toFixed(2);
-    if (liquido > bruto) { alert('O salário líquido não pode ser maior que o bruto. Confira os valores.'); return; }
-    const existente = dados.salarios.find((s) => s.perfil === perfil && s.mes === mes);
+    if (liquido > bruto) { alert('O valor líquido não pode ser maior que o bruto. Confira os valores.'); return; }
+    const existente = dados.salarios.find((s) => s.perfil === perfil && s.mes === mes && s.tipo === tipo);
     if (existente) {
-      if (!confirm(`Já existe um registro de ${primeiroNome(perfil)} em ${rotuloMes(mes)}. Substituir?`)) return;
+      if (!confirm(`Já existe ${TIPOS_TRAB[tipo]} de ${primeiroNome(perfil)} em ${rotuloMes(mes)}. Substituir?`)) return;
       dados.salarios = dados.salarios.filter((s) => s !== existente);
     }
-    dados.salarios.push({ id: novoId(), perfil, mes, bruto, liquido, fgts, obs: $('#tb-obs').value.trim() });
+    dados.salarios.push({ id: novoId(), perfil, tipo, mes, bruto, liquido, fgts, obs: $('#tb-obs').value.trim() });
     salvar();
     $('#form-trabalho').reset();
     delete $('#tb-fgts').dataset.manual;
