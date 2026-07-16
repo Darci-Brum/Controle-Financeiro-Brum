@@ -31,6 +31,12 @@ Site completo de gestão financeira para o casal **Darci Brum** e **Jamylli Kaua
 - **Filtros** por mês e por perfil (ou o casal inteiro)
 - Exportação dos dados em JSON
 
+- **☁️ Sincronização entre aparelhos** — com um código da família + senha, os dados ficam iguais
+  no celular e no computador dos dois (Configurações → Sincronização)
+- **Editar lançamentos**, **lançamentos fixos mensais**, **importação de extrato bancário (CSV/OFX)**,
+  **avisos de faturas**, **relatório do mês em PDF**, **comparativo anual**, **rendimento estimado da
+  carteira**, **PIN de entrada** e **simulador de quitação de dívidas**
+
 ## Como usar
 
 Abra o `index.html` no navegador — ou acesse a versão publicada no GitHub Pages.

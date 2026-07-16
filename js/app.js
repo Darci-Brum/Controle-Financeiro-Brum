@@ -167,7 +167,10 @@ function carregar() {
   adicionarExemplosTrabalho(novo);
   return novo;
 }
-function salvar() { localStorage.setItem(CHAVE, JSON.stringify(dados)); }
+function salvar() {
+  localStorage.setItem(CHAVE, JSON.stringify(dados));
+  agendarEnvioNuvem(); // envia para a nuvem se este aparelho estiver conectado
+}
 function novoId() { return dados.proximoId++; }
 
 // ---------- Utilidades ----------
@@ -2339,6 +2342,141 @@ function simularQuitacao() {
     </div>`;
 }
 
+// ==========================================================
+// SINCRONIZAÇÃO NA NUVEM (Supabase — código da família + senha)
+// ==========================================================
+const NUVEM_URL = 'https://jiefqjpvxbgzxyhufpib.supabase.co';
+const NUVEM_CHAVE = 'sb_publishable_pC5Q0DLXbQdoJZlmr5pjiA_0qyH5doF';
+const CHAVE_NUVEM = 'cfbrum-nuvem';
+const CHAVE_SYNC_EM = 'cfbrum-sync-em';
+
+let nuvem = null;
+try { nuvem = JSON.parse(localStorage.getItem(CHAVE_NUVEM) || 'null'); } catch (e) { /* ignora */ }
+let timerNuvem = null;
+
+async function rpcNuvem(fn, corpo) {
+  const r = await fetch(`${NUVEM_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: NUVEM_CHAVE, Authorization: 'Bearer ' + NUVEM_CHAVE },
+    body: JSON.stringify(corpo),
+  });
+  const resp = await r.json().catch(() => null);
+  if (!r.ok) throw new Error((resp && (resp.message || resp.hint)) || 'Falha na conexão com a nuvem');
+  return resp;
+}
+function statusSync(txt, erro) {
+  const el = $('#sync-status');
+  if (el) { el.textContent = txt; el.style.color = erro ? 'var(--negativo)' : 'var(--texto-2)'; }
+}
+function agendarEnvioNuvem() {
+  if (!nuvem) return;
+  clearTimeout(timerNuvem);
+  statusSync('salvando na nuvem...');
+  timerNuvem = setTimeout(enviarParaNuvem, 1500);
+}
+async function enviarParaNuvem() {
+  if (!nuvem) return;
+  try {
+    const quando = await rpcNuvem('cf_salvar', { fid: nuvem.fid, senha: nuvem.senha, novo: dados });
+    localStorage.setItem(CHAVE_SYNC_EM, quando);
+    statusSync('✅ sincronizado às ' + new Date(quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+  } catch (e) { statusSync('⚠️ ' + e.message, true); }
+}
+async function baixarDaNuvem() {
+  if (!nuvem) return;
+  try {
+    statusSync('sincronizando...');
+    const res = await rpcNuvem('cf_obter', { fid: nuvem.fid, senha: nuvem.senha });
+    const localEm = localStorage.getItem(CHAVE_SYNC_EM) || '';
+    if (res.dados && res.dados.perfis && res.atualizado > localEm) {
+      dados = res.dados;
+      localStorage.setItem(CHAVE, JSON.stringify(dados));
+      localStorage.setItem(CHAVE_SYNC_EM, res.atualizado);
+      if (perfilAtivo) renderTudo(); else renderLogin();
+      statusSync('✅ dados atualizados da nuvem');
+    } else {
+      enviarParaNuvem(); // este aparelho está mais novo: envia
+    }
+  } catch (e) { statusSync('⚠️ ' + e.message, true); }
+}
+
+function renderSync() {
+  const alvo = $('#sync-area');
+  if (!alvo) return;
+  if (!nuvem) {
+    alvo.innerHTML = `
+      <div class="linha-botoes">
+        <button id="btn-sync-criar" class="btn-principal">☁️ Criar código da família</button>
+        <button id="btn-sync-conectar" class="btn-secundario">🔗 Já tenho um código</button>
+      </div>
+      <p id="sync-status" class="dica" style="margin-top:8px">Este aparelho ainda não está sincronizado.</p>`;
+    $('#btn-sync-criar').addEventListener('click', criarFamiliaNuvem);
+    $('#btn-sync-conectar').addEventListener('click', conectarFamiliaNuvem);
+  } else {
+    alvo.innerHTML = `
+      <p style="font-size:.85rem; margin-bottom:6px">Código da família conectado neste aparelho:</p>
+      <div class="email-item" style="margin-bottom:10px">
+        <span style="font-family:ui-monospace, monospace">${escapar(nuvem.fid)}</span>
+        <button id="btn-sync-copiar" class="btn-lixo" title="Copiar código">📋</button>
+      </div>
+      <div class="linha-botoes">
+        <button id="btn-sync-agora" class="btn-secundario">🔄 Sincronizar agora</button>
+        <button id="btn-sync-sair" class="btn-perigo">Desconectar este aparelho</button>
+      </div>
+      <p id="sync-status" class="dica" style="margin-top:8px"></p>`;
+    $('#btn-sync-copiar').addEventListener('click', () =>
+      navigator.clipboard.writeText(nuvem.fid).then(() => alert('Código copiado! 📋')).catch(() => prompt('Copie o código:', nuvem.fid)));
+    $('#btn-sync-agora').addEventListener('click', () => baixarDaNuvem());
+    $('#btn-sync-sair').addEventListener('click', () => {
+      if (confirm('Desconectar? Os dados continuam neste aparelho e na nuvem — só param de sincronizar.')) {
+        nuvem = null;
+        localStorage.removeItem(CHAVE_NUVEM);
+        localStorage.removeItem(CHAVE_SYNC_EM);
+        renderSync();
+      }
+    });
+  }
+}
+async function criarFamiliaNuvem() {
+  const s1 = prompt('Crie uma senha de sincronização (mínimo 4 caracteres) — vocês dois vão usá-la para conectar os aparelhos:');
+  if (s1 === null) return;
+  if (s1.length < 4) { alert('A senha precisa ter pelo menos 4 caracteres.'); return; }
+  const s2 = prompt('Digite a senha de novo para confirmar:');
+  if (s1 !== s2) { alert('As senhas não conferem.'); return; }
+  try {
+    const fid = await rpcNuvem('cf_criar_familia', { senha: s1 });
+    nuvem = { fid, senha: s1 };
+    localStorage.setItem(CHAVE_NUVEM, JSON.stringify(nuvem));
+    renderSync();
+    await enviarParaNuvem();
+    alert('Pronto! ☁️ Este aparelho está sincronizado.\n\nCÓDIGO DA FAMÍLIA:\n' + fid +
+      '\n\nNo outro aparelho: Configurações → Sincronização → "Já tenho um código", e use esse código com a senha que você criou.');
+  } catch (e) { alert('Não deu certo: ' + e.message); }
+}
+async function conectarFamiliaNuvem() {
+  const fid = (prompt('Cole o código da família:') || '').trim();
+  if (!fid) return;
+  const senha = prompt('Digite a senha de sincronização:');
+  if (senha === null) return;
+  try {
+    const res = await rpcNuvem('cf_obter', { fid, senha });
+    nuvem = { fid, senha };
+    localStorage.setItem(CHAVE_NUVEM, JSON.stringify(nuvem));
+    if (res.dados && res.dados.perfis &&
+        confirm('Conectado! Este aparelho deve USAR OS DADOS DA NUVEM?\n\nOK = trazer os dados da nuvem para cá (recomendado no aparelho novo)\nCancelar = enviar os dados DESTE aparelho para a nuvem')) {
+      dados = res.dados;
+      localStorage.setItem(CHAVE, JSON.stringify(dados));
+      localStorage.setItem(CHAVE_SYNC_EM, res.atualizado);
+      if (perfilAtivo && !dados.perfis.some((p) => p.id === perfilAtivo)) sair();
+      else renderTudo();
+    } else {
+      await enviarParaNuvem();
+    }
+    renderSync();
+    alert('Aparelho conectado! ☁️ Agora tudo o que for lançado aqui aparece nos outros aparelhos conectados.');
+  } catch (e) { alert('Não deu certo: ' + e.message); }
+}
+
 // ---------- Navegação por abas ----------
 function configurarAbas() {
   document.querySelectorAll('.aba').forEach((b) => b.addEventListener('click', () => {
@@ -2369,6 +2507,7 @@ function renderTudo() {
   renderRecorrentes();
   renderAnual();
   renderPin();
+  renderSync();
   preencherSimulador();
 }
 
@@ -2436,6 +2575,9 @@ async function iniciar() {
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
+
+  // Nuvem: baixa os dados mais recentes se este aparelho estiver conectado
+  baixarDaNuvem();
 
   if (perfilAtivo && dados.perfis.some((p) => p.id === perfilAtivo)) entrar(perfilAtivo);
   else renderLogin();
