@@ -23,6 +23,9 @@ Site completo de gestão financeira para o casal **Darci Brum** e **Jamylli Kaua
 - **Planejamento** — metas com progresso, orçamento mensal (teto) por categoria e **Cofre do
   casal**: total guardado aparece como •••••• e só é revelado com senha (criada na primeira
   aplicação); aplicações e retiradas recalculam o total automaticamente
+- **💼 Trabalho** — registro mensal do salário de carteira de cada um (bruto, líquido e FGTS),
+  com descontos calculados automaticamente, FGTS sugerido em 8% do bruto, somatória automática
+  (FGTS acumulado e líquido do ano) e gráfico de evolução para comparar aumentos e promoções
 - **Modo TV** 📺 — tela cheia com letras grandes para apresentar o dashboard
 - **Tema claro / escuro** com um clique, em tons pastéis neutros e fundo tranquilo
 - **Filtros** por mês e por perfil (ou o casal inteiro)

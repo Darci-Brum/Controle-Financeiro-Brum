@@ -54,6 +54,7 @@
       <button class="aba" data-aba="emprestimos">🤝 Empréstimos</button>
       <button class="aba" data-aba="investimentos">📈 Investimentos</button>
       <button class="aba" data-aba="planejamento">🎯 Planejamento</button>
+      <button class="aba" data-aba="trabalho">💼 Trabalho</button>
       <button class="aba" data-aba="config">⚙️ Configurações</button>
     </nav>
 
@@ -322,6 +323,38 @@
           <h3>Orçamento mensal por categoria</h3>
           <p class="dica">Defina um teto de gastos por categoria e acompanhe quanto do orçamento já foi usado no mês selecionado.</p>
           <div id="lista-orcamentos"></div>
+        </div>
+      </section>
+
+      <!-- ===== TRABALHO ===== -->
+      <section id="aba-trabalho" class="painel">
+        <div class="cartao">
+          <h3>Novo registro de salário</h3>
+          <p class="dica">Registre todo mês o salário de carteira de cada um: bruto, líquido e FGTS.
+            Os <strong>descontos são calculados sozinhos</strong> (bruto − líquido) e o <strong>FGTS é sugerido
+            automaticamente em 8% do bruto</strong> — ajuste se o holerite mostrar outro valor. Quando houver
+            aumento ou promoção, anote na observação para acompanhar a evolução no gráfico.</p>
+          <form id="form-trabalho" class="formulario">
+            <div class="campo"><label>Quem</label><select id="tb-perfil"></select></div>
+            <div class="campo"><label>Mês de referência</label><input id="tb-mes" type="month" required></div>
+            <div class="campo"><label>Salário bruto (R$)</label><input id="tb-bruto" type="number" step="0.01" min="0.01" required placeholder="do holerite"></div>
+            <div class="campo"><label>Salário líquido (R$)</label><input id="tb-liquido" type="number" step="0.01" min="0.01" required placeholder="o que cai na conta"></div>
+            <div class="campo"><label>FGTS do mês (R$)</label><input id="tb-fgts" type="number" step="0.01" min="0" placeholder="8% do bruto"></div>
+            <div class="campo"><label>Observação</label><input id="tb-obs" placeholder="Ex.: aumento, promoção..."></div>
+            <div class="campo campo-botao"><button type="submit" class="btn-principal">Salvar registro</button></div>
+          </form>
+        </div>
+        <div id="trabalho-cards" class="cards-resumo"></div>
+        <div class="cartao grafico-cartao">
+          <h3>📈 Evolução do salário líquido <small>compare aumentos ao longo do tempo</small></h3>
+          <div id="grafico-trabalho" class="area-grafico"></div>
+        </div>
+        <div class="cartao">
+          <h3>Histórico de salários <small id="trabalho-resumo"></small></h3>
+          <div class="tabela-scroll"><table class="tabela" id="tabela-trabalho">
+            <thead><tr><th>Mês</th><th>Quem</th><th class="dir">Bruto</th><th class="dir">Descontos</th><th class="dir">Líquido</th><th class="dir">FGTS</th><th>Variação</th><th>Obs.</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
         </div>
       </section>
 

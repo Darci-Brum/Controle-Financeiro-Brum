@@ -43,10 +43,30 @@ function estadoInicial() {
     investimentos: [],
     metas: [],
     notas: [], // notas fiscais do mercado
+    salarios: [], // registro de trabalho (bruto, líquido, FGTS)
     cofre: { senha: null, movs: [] },
     orcamentos: {}, // { 'Mercado': 900, ... }
     proximoId: 100,
   };
+}
+
+// Exemplos da aba Trabalho (flag demo:true)
+function adicionarExemplosTrabalho(d) {
+  const hoje = new Date();
+  const mes = (recuo) => {
+    const dt = new Date(hoje.getFullYear(), hoje.getMonth() - recuo, 1);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+  };
+  d.salarios.push(
+    { id: 9171, demo: true, perfil: 'darci', mes: mes(2), bruto: 3500, liquido: 3012.5, fgts: 280, obs: '' },
+    { id: 9172, demo: true, perfil: 'darci', mes: mes(1), bruto: 3500, liquido: 3012.5, fgts: 280, obs: '' },
+    { id: 9173, demo: true, perfil: 'darci', mes: mes(0), bruto: 3850, liquido: 3290, fgts: 308, obs: 'Aumento de 10% 🎉' },
+    { id: 9174, demo: true, perfil: 'jamylli', mes: mes(2), bruto: 2800, liquido: 2464, fgts: 224, obs: '' },
+    { id: 9175, demo: true, perfil: 'jamylli', mes: mes(1), bruto: 2800, liquido: 2464, fgts: 224, obs: '' },
+    { id: 9176, demo: true, perfil: 'jamylli', mes: mes(0), bruto: 2800, liquido: 2464, fgts: 224, obs: '' },
+  );
+  d.proximoId = Math.max(d.proximoId || 100, 9200);
+  d.exemplosV3 = true;
 }
 
 // Exemplos (flag demo:true) para mostrar como fica na vida real —
@@ -116,11 +136,14 @@ function carregar() {
         if (e.pago === undefined) e.pago = e.parcelas ? +((e.total / e.parcelas) * (e.pagas || 0)).toFixed(2) : 0;
       });
       if (!d.exemplosV2) adicionarExemplos(d);
+      if (!d.salarios) d.salarios = [];
+      if (!d.exemplosV3) adicionarExemplosTrabalho(d);
       return d;
     }
   } catch (e) { /* dados corrompidos: recomeça */ }
   const novo = estadoInicial();
   adicionarExemplos(novo);
+  adicionarExemplosTrabalho(novo);
   return novo;
 }
 function salvar() { localStorage.setItem(CHAVE, JSON.stringify(dados)); }
@@ -230,7 +253,7 @@ function preencherSelects() {
   // Perfis
   const selFP = $('#filtro-perfil');
   selFP.querySelectorAll('option:not([value="todos"])').forEach((o) => o.remove());
-  const donos = [$('#lc-perfil'), $('#ct-dono'), $('#ep-dono'), $('#cr-dono'), $('#iv-dono'), $('#nf-perfil')];
+  const donos = [$('#lc-perfil'), $('#ct-dono'), $('#ep-dono'), $('#cr-dono'), $('#iv-dono'), $('#nf-perfil'), $('#tb-perfil')];
   donos.forEach((s) => (s.innerHTML = ''));
   const selMeta = $('#mt-dono');
   selMeta.querySelectorAll('option:not([value="casal"])').forEach((o) => o.remove());
@@ -1193,7 +1216,7 @@ function configurarConfig() {
     URL.revokeObjectURL(a.href);
   });
   $('#btn-limpar-demo').addEventListener('click', () => {
-    ['lancamentos', 'cartoes', 'emprestimos', 'crediarios', 'investimentos', 'metas', 'notas']
+    ['lancamentos', 'cartoes', 'emprestimos', 'crediarios', 'investimentos', 'metas', 'notas', 'salarios']
       .forEach((col) => { dados[col] = dados[col].filter((x) => !x.demo); });
     dados.cofre.movs = dados.cofre.movs.filter((m) => !m.demo);
     salvar(); renderTudo();
@@ -1595,6 +1618,185 @@ function configurarMercado() {
   });
 }
 
+// ==========================================================
+// TRABALHO — registro de salários (bruto, líquido, FGTS)
+// ==========================================================
+function renderTrabalho() {
+  const lista = dados.salarios;
+
+  // Cards de resumo por pessoa (somatória automática)
+  const anoAtual = String(new Date().getFullYear());
+  let cardsHtml = '';
+  dados.perfis.forEach((p) => {
+    const meus = lista.filter((s) => s.perfil === p.id).sort((a, b) => a.mes.localeCompare(b.mes));
+    if (!meus.length) {
+      cardsHtml += `<div class="card-resumo"><div class="rotulo"><span style="color:${p.cor}">●</span> ${escapar(primeiroNome(p.id))}</div>
+        <div class="valor">—</div><div class="extra">nenhum registro ainda</div></div>`;
+      return;
+    }
+    const atual = meus[meus.length - 1];
+    const primeiro = meus[0];
+    const evol = primeiro.liquido > 0 ? ((atual.liquido - primeiro.liquido) / primeiro.liquido) * 100 : 0;
+    const fgtsAcum = meus.reduce((s, x) => s + (x.fgts || 0), 0);
+    const liqAno = meus.filter((x) => x.mes.startsWith(anoAtual)).reduce((s, x) => s + x.liquido, 0);
+    cardsHtml += `
+      <div class="card-resumo">
+        <div class="rotulo"><span style="color:${p.cor}">●</span> ${escapar(primeiroNome(p.id))} · salário atual</div>
+        <div class="valor">${fmtBRL(atual.liquido)}</div>
+        <div class="extra">${Math.abs(evol) < 0.05 ? 'sem variação desde ' + rotuloMes(primeiro.mes)
+          : `<span class="${evol >= 0 ? 'delta-pos' : 'delta-neg'}">${evol >= 0 ? '▲' : '▼'} ${fmtPct(Math.abs(evol))}</span> desde ${rotuloMes(primeiro.mes)}`}</div>
+      </div>
+      <div class="card-resumo">
+        <div class="rotulo"><span style="color:${p.cor}">●</span> ${escapar(primeiroNome(p.id))} · FGTS somado</div>
+        <div class="valor pos">${fmtBRL(fgtsAcum)}</div>
+        <div class="extra">${meus.length} ${meus.length === 1 ? 'mês registrado' : 'meses registrados'}</div>
+      </div>
+      <div class="card-resumo">
+        <div class="rotulo"><span style="color:${p.cor}">●</span> ${escapar(primeiroNome(p.id))} · líquido em ${anoAtual}</div>
+        <div class="valor">${fmtBRL(liqAno)}</div>
+        <div class="extra">soma automática do ano</div>
+      </div>`;
+  });
+  $('#trabalho-cards').innerHTML = cardsHtml;
+
+  renderGraficoTrabalho();
+
+  // Histórico (mais recente primeiro) com variação vs mês anterior da mesma pessoa
+  const corpo = $('#tabela-trabalho tbody');
+  const ordenada = [...lista].sort((a, b) => b.mes.localeCompare(a.mes) || a.perfil.localeCompare(b.perfil));
+  corpo.innerHTML = ordenada.map((s) => {
+    const anteriores = lista.filter((x) => x.perfil === s.perfil && x.mes < s.mes).sort((a, b) => b.mes.localeCompare(a.mes));
+    const ant = anteriores[0];
+    let variacao = '<span class="chip-cat">primeiro registro</span>';
+    if (ant && ant.liquido > 0) {
+      const v = ((s.liquido - ant.liquido) / ant.liquido) * 100;
+      variacao = Math.abs(v) < 0.05 ? '='
+        : `<span class="${v > 0 ? 'delta-pos' : 'delta-neg'}">${v > 0 ? '▲' : '▼'} ${fmtPct(Math.abs(v))}</span>`;
+    }
+    return `
+      <tr>
+        <td>${rotuloMes(s.mes)}</td>
+        <td>${escapar(primeiroNome(s.perfil))}</td>
+        <td class="dir">${fmtBRL(s.bruto)}</td>
+        <td class="dir val-neg">− ${fmtBRL(Math.max(s.bruto - s.liquido, 0))}</td>
+        <td class="dir val-pos">${fmtBRL(s.liquido)}</td>
+        <td class="dir">${fmtBRL(s.fgts || 0)}</td>
+        <td>${variacao}</td>
+        <td>${escapar(s.obs || '')}</td>
+        <td><button class="btn-lixo" data-id="${s.id}" title="Excluir">🗑</button></td>
+      </tr>`;
+  }).join('') || '<tr><td colspan="9" class="vazio">Nenhum salário registrado ainda.</td></tr>';
+
+  const fgtsTotal = lista.reduce((s, x) => s + (x.fgts || 0), 0);
+  $('#trabalho-resumo').textContent = lista.length
+    ? `${lista.length} registros · FGTS do casal somado: ${fmtBRL(fgtsTotal)}` : '';
+
+  corpo.querySelectorAll('.btn-lixo').forEach((b) => b.addEventListener('click', () => {
+    if (confirm('Excluir este registro de salário?')) {
+      dados.salarios = dados.salarios.filter((s) => s.id != b.dataset.id);
+      salvar(); renderTudo();
+    }
+  }));
+}
+
+// Gráfico de linhas: evolução do salário líquido de cada um
+function renderGraficoTrabalho() {
+  const alvo = $('#grafico-trabalho');
+  const lista = dados.salarios;
+  if (!lista.length) { alvo.innerHTML = '<p class="vazio">Registre os salários para ver a evolução aqui. 📈</p>'; return; }
+  const meses = [...new Set(lista.map((s) => s.mes))].sort();
+
+  const W = 560, H = 250, mx = 56, my = 16, base = H - 32;
+  const vals = lista.map((s) => s.liquido);
+  const vMax = Math.max(...vals) * 1.06;
+  const vMin = Math.max(Math.min(...vals) * 0.92, 0);
+  const faixa = vMax - vMin || 1;
+  const x = (i) => meses.length === 1 ? (mx + (W - mx) / 2) : mx + (i / (meses.length - 1)) * (W - mx - 16);
+  const y = (v) => my + (1 - (v - vMin) / faixa) * (base - my);
+
+  let grade = '';
+  for (let g = 0; g <= 3; g++) {
+    const v = vMin + (faixa / 3) * g;
+    grade += `<line x1="${mx}" y1="${y(v)}" x2="${W - 10}" y2="${y(v)}" stroke="var(--grade)"/>
+      <text x="${mx - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="var(--texto-mudo)">${(v / 1000).toFixed(1).replace('.', ',')} mil</text>`;
+  }
+  let eixoX = '';
+  meses.forEach((m, i) => {
+    eixoX += `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="10" fill="var(--texto-mudo)">${rotuloMes(m)}</text>`;
+  });
+
+  let linhas = '', pontos = '';
+  dados.perfis.forEach((p) => {
+    const meus = meses.map((m) => lista.find((s) => s.perfil === p.id && s.mes === m) || null);
+    let caminho = '', ligado = false;
+    meus.forEach((s, i) => {
+      if (!s) { ligado = false; return; }
+      caminho += `${ligado ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(s.liquido).toFixed(1)} `;
+      ligado = true;
+      pontos += `<circle class="marca-hover" cx="${x(i).toFixed(1)}" cy="${y(s.liquido).toFixed(1)}" r="5.5"
+        fill="${p.cor}" stroke="var(--superficie)" stroke-width="2"
+        data-nome="${escapar(primeiroNome(p.id))}" data-mes="${s.mes}" data-bruto="${s.bruto}"
+        data-liq="${s.liquido}" data-fgts="${s.fgts || 0}" data-obs="${escapar(s.obs || '')}"/>`;
+      if (s.obs) pontos += `<text x="${x(i).toFixed(1)}" y="${(y(s.liquido) - 12).toFixed(1)}" text-anchor="middle" font-size="11">⭐</text>`;
+    });
+    if (caminho) linhas += `<path d="${caminho}" fill="none" stroke="${p.cor}" stroke-width="2.5" stroke-linejoin="round"/>`;
+  });
+
+  alvo.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução do salário líquido">
+      ${grade}${linhas}${pontos}${eixoX}
+    </svg>
+    <div class="legenda">
+      ${dados.perfis.map((p) => `<span class="legenda-item"><span class="legenda-cor" style="background:${p.cor}"></span> ${escapar(primeiroNome(p.id))}</span>`).join('')}
+      <span class="legenda-item">⭐ = mês com observação (aumento, promoção...)</span>
+    </div>`;
+
+  alvo.querySelectorAll('circle').forEach((el) => {
+    el.addEventListener('mousemove', (ev) => mostrarTooltip(ev, `
+      <strong>${el.dataset.nome} — ${rotuloMes(el.dataset.mes)}</strong>
+      <div class="tt-linha">Bruto: ${fmtBRL(+el.dataset.bruto)}</div>
+      <div class="tt-linha">Descontos: ${fmtBRL(Math.max(+el.dataset.bruto - +el.dataset.liq, 0))}</div>
+      <div class="tt-linha">Líquido: ${fmtBRL(+el.dataset.liq)}</div>
+      <div class="tt-linha">FGTS: ${fmtBRL(+el.dataset.fgts)}</div>
+      ${el.dataset.obs ? `<div class="tt-linha">📝 ${el.dataset.obs}</div>` : ''}`));
+    el.addEventListener('mouseleave', esconderTooltip);
+  });
+}
+
+function configurarTrabalho() {
+  // FGTS sugerido automaticamente: 8% do bruto (até a pessoa digitar manualmente)
+  $('#tb-bruto').addEventListener('input', () => {
+    const f = $('#tb-fgts');
+    if (!f.dataset.manual) {
+      const b = parseFloat($('#tb-bruto').value);
+      f.value = b > 0 ? (b * 0.08).toFixed(2) : '';
+    }
+  });
+  $('#tb-fgts').addEventListener('input', () => { $('#tb-fgts').dataset.manual = '1'; });
+
+  $('#form-trabalho').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const perfil = $('#tb-perfil').value;
+    const mes = $('#tb-mes').value;
+    const bruto = parseFloat($('#tb-bruto').value);
+    const liquido = parseFloat($('#tb-liquido').value);
+    const fgts = parseFloat($('#tb-fgts').value) || +(bruto * 0.08).toFixed(2);
+    if (liquido > bruto) { alert('O salário líquido não pode ser maior que o bruto. Confira os valores.'); return; }
+    const existente = dados.salarios.find((s) => s.perfil === perfil && s.mes === mes);
+    if (existente) {
+      if (!confirm(`Já existe um registro de ${primeiroNome(perfil)} em ${rotuloMes(mes)}. Substituir?`)) return;
+      dados.salarios = dados.salarios.filter((s) => s !== existente);
+    }
+    dados.salarios.push({ id: novoId(), perfil, mes, bruto, liquido, fgts, obs: $('#tb-obs').value.trim() });
+    salvar();
+    $('#form-trabalho').reset();
+    delete $('#tb-fgts').dataset.manual;
+    $('#tb-mes').value = new Date().toISOString().slice(0, 7);
+    if (perfilAtivo) $('#tb-perfil').value = perfilAtivo;
+    renderTudo();
+  });
+}
+
 // ---------- Navegação por abas ----------
 function configurarAbas() {
   document.querySelectorAll('.aba').forEach((b) => b.addEventListener('click', () => {
@@ -1620,6 +1822,7 @@ function renderTudo() {
   renderCofre();
   renderMetas();
   renderOrcamentos();
+  renderTrabalho();
   renderConfig();
 }
 
@@ -1645,6 +1848,8 @@ function iniciar() {
   configurarForms();
   configurarConfig();
   configurarMercado();
+  configurarTrabalho();
+  $('#tb-mes').value = new Date().toISOString().slice(0, 7);
   configurarCofre();
 
   // Modo TV
