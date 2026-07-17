@@ -435,6 +435,10 @@ small { color: var(--texto-2); font-weight: 400; }
 }
 .cal-evento.fecha { border-color: #ec835a; }
 .cal-evento.vence { border-color: #d03b3b; }
+.cal-evento.anota { border-color: var(--acento); background: var(--acento-suave); }
+.cal-dia[data-data] { cursor: pointer; transition: background .12s, border-color .12s; }
+.cal-dia[data-data]:hover { background: var(--superficie-2); border-color: var(--acento); }
+.alerta-chip.anota { background: var(--acento-suave); border-color: var(--acento); }
 .alertas-cartoes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .alerta-chip {
   font-size: .78rem; border-radius: 20px; padding: 6px 12px;

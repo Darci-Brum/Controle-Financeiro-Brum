@@ -87,6 +87,20 @@ function adicionarExemplosFeriasDecimo(d) {
   d.exemplosV4 = true;
 }
 
+// Exemplos de anotações no calendário (flag demo:true)
+function adicionarExemplosEventos(d) {
+  if (!d.eventos) d.eventos = [];
+  const hoje = new Date();
+  const dia = (n) => `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(Math.min(n, 28)).padStart(2, '0')}`;
+  d.eventos.push(
+    { id: 9181, demo: true, data: dia(18), texto: '🎂 Aniversário da vovó' },
+    { id: 9182, demo: true, data: dia(25), texto: '🎉 Festa dos amigos' },
+    { id: 9183, demo: true, data: dia(10), texto: '💐 Aniversário de namoro' },
+  );
+  d.proximoId = Math.max(d.proximoId || 100, 9200);
+  d.exemplosV5 = true;
+}
+
 // Exemplos (flag demo:true) para mostrar como fica na vida real —
 // removíveis em Configurações → Remover dados de exemplo.
 function adicionarExemplos(d) {
@@ -159,12 +173,15 @@ function carregar() {
       d.salarios.forEach((s) => { if (!s.tipo) s.tipo = 'salario'; });
       if (!d.exemplosV4) adicionarExemplosFeriasDecimo(d);
       if (!d.recorrentes) d.recorrentes = [];
+      if (!d.eventos) d.eventos = [];
+      if (!d.exemplosV5) adicionarExemplosEventos(d);
       return d;
     }
   } catch (e) { /* dados corrompidos: recomeça */ }
   const novo = estadoInicial();
   adicionarExemplos(novo);
   adicionarExemplosTrabalho(novo);
+  adicionarExemplosEventos(novo);
   return novo;
 }
 function salvar() {
@@ -902,17 +919,23 @@ function renderCalendario() {
     .map((d) => `<div class="cal-cab">${d}</div>`).join('');
   for (let i = 0; i < primeiroDiaSemana; i++) html += '<div class="cal-dia vazio-cal"></div>';
   for (let d = 1; d <= totalDias; d++) {
+    const dataISO = `${mesRef}-${String(d).padStart(2, '0')}`;
     const eventos = [];
     dados.cartoes.forEach((c) => {
       if (Math.min(c.fecha, totalDias) === d) eventos.push(`<div class="cal-evento fecha" title="Fechamento da fatura ${escapar(c.nome)}">🔒 ${escapar(c.nome)}</div>`);
       if (Math.min(c.vence, totalDias) === d) eventos.push(`<div class="cal-evento vence" title="Vencimento da fatura ${escapar(c.nome)}">💰 ${escapar(c.nome)}</div>`);
     });
+    dados.eventos.filter((e) => e.data === dataISO).forEach((e) => {
+      eventos.push(`<div class="cal-evento anota" title="${escapar(e.texto)}">📌 ${escapar(e.texto)}</div>`);
+    });
     const ehHoje = ehMesAtual && hoje.getDate() === d;
-    html += `<div class="cal-dia ${ehHoje ? 'hoje' : ''}"><span class="num">${d}</span>${eventos.join('')}</div>`;
+    html += `<div class="cal-dia ${ehHoje ? 'hoje' : ''}" data-data="${dataISO}" title="Clique para anotar neste dia"><span class="num">${d}</span>${eventos.join('')}</div>`;
   }
   alvo.innerHTML = html;
+  alvo.querySelectorAll('.cal-dia[data-data]').forEach((el) =>
+    el.addEventListener('click', () => modalDia(el.dataset.data)));
 
-  // Avisos de fechamento próximo (até 5 dias)
+  // Avisos de fechamento próximo (até 5 dias) + anotações chegando
   const avisos = [];
   const hoje0 = new Date(); hoje0.setHours(0, 0, 0, 0);
   dados.cartoes.forEach((c) => {
@@ -922,8 +945,59 @@ function renderCalendario() {
     const dias = Math.round((fecha - hoje0) / 86400000);
     if (dias <= 5) avisos.push(`<span class="alerta-chip">⚠️ <strong>${escapar(c.nome)}</strong> fecha ${dias === 0 ? 'HOJE' : dias === 1 ? 'amanhã' : 'em ' + dias + ' dias'} (dia ${c.fecha})</span>`);
   });
+  dados.eventos.forEach((e) => {
+    const [a, m, d] = e.data.split('-').map(Number);
+    const quando = new Date(a, m - 1, d);
+    const dias = Math.round((quando - hoje0) / 86400000);
+    if (dias >= 0 && dias <= 5) avisos.push(`<span class="alerta-chip anota">📌 <strong>${escapar(e.texto)}</strong> ${dias === 0 ? 'HOJE' : dias === 1 ? 'amanhã' : 'em ' + dias + ' dias'}</span>`);
+  });
   $('#alertas-cartoes').innerHTML = avisos.join('') ||
-    (dados.cartoes.length ? '<span class="dica">Nenhuma fatura fechando nos próximos 5 dias. 😌</span>' : '');
+    (dados.cartoes.length ? '<span class="dica">Nenhuma fatura fechando nem evento nos próximos 5 dias. 😌</span>' : '');
+}
+
+// Modal de anotações de um dia do calendário
+function modalDia(dataISO) {
+  const doDia = dados.eventos.filter((e) => e.data === dataISO);
+  const linhas = doDia.map((e) => `
+    <div class="ultimo-item">
+      <span>📌 ${escapar(e.texto)}</span>
+      <span style="white-space:nowrap">
+        <button class="btn-lixo ev-editar" data-id="${e.id}" title="Editar">✏️</button>
+        <button class="btn-lixo ev-excluir" data-id="${e.id}" title="Excluir">🗑</button>
+      </span>
+    </div>`).join('') || '<p class="vazio">Nenhuma anotação neste dia ainda.</p>';
+  abrirModal(`📅 ${fmtData(dataISO)}`, `
+    ${linhas}
+    <div class="form-email" style="margin-top:14px">
+      <input id="ev-novo" maxlength="80" placeholder="Ex.: 🎂 Aniversário da vovó, festa, consulta...">
+      <button id="ev-adicionar" class="btn-principal" type="button">＋ Anotar</button>
+    </div>`);
+
+  const corpo = $('#modal-corpo');
+  const inp = corpo.querySelector('#ev-novo');
+  const salvarNovo = () => {
+    const t = inp.value.trim();
+    if (!t) return;
+    dados.eventos.push({ id: novoId(), data: dataISO, texto: t });
+    salvar(); renderCalendario(); modalDia(dataISO);
+  };
+  corpo.querySelector('#ev-adicionar').addEventListener('click', salvarNovo);
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') salvarNovo(); });
+  inp.focus();
+
+  corpo.querySelectorAll('.ev-editar').forEach((b) => b.addEventListener('click', () => {
+    const ev = dados.eventos.find((x) => x.id == b.dataset.id);
+    const novo = prompt('Editar anotação:', ev.texto);
+    if (novo !== null && novo.trim()) {
+      ev.texto = novo.trim();
+      delete ev.demo;
+      salvar(); renderCalendario(); modalDia(dataISO);
+    }
+  }));
+  corpo.querySelectorAll('.ev-excluir').forEach((b) => b.addEventListener('click', () => {
+    dados.eventos = dados.eventos.filter((x) => x.id != b.dataset.id);
+    salvar(); renderCalendario(); modalDia(dataISO);
+  }));
 }
 
 // ==========================================================
@@ -1353,7 +1427,7 @@ function configurarConfig() {
     URL.revokeObjectURL(a.href);
   });
   $('#btn-limpar-demo').addEventListener('click', () => {
-    ['lancamentos', 'cartoes', 'emprestimos', 'crediarios', 'investimentos', 'metas', 'notas', 'salarios']
+    ['lancamentos', 'cartoes', 'emprestimos', 'crediarios', 'investimentos', 'metas', 'notas', 'salarios', 'eventos']
       .forEach((col) => { dados[col] = dados[col].filter((x) => !x.demo); });
     dados.cofre.movs = dados.cofre.movs.filter((m) => !m.demo);
     salvar(); renderTudo();
