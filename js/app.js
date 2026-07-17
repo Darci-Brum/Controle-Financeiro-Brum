@@ -1191,9 +1191,9 @@ function configurarCofre() {
 // MODO TV (tela cheia para apresentação)
 // ==========================================================
 function alternarTV() {
+  // funciona na aba que estiver aberta — as abas continuam clicáveis durante a apresentação
   if (document.fullscreenElement) document.exitFullscreen();
   else {
-    document.querySelector('[data-aba="dashboard"]').click();
     (document.documentElement.requestFullscreen ? document.documentElement.requestFullscreen() : Promise.reject())
       .catch(() => document.body.classList.add('modo-tv'));
   }

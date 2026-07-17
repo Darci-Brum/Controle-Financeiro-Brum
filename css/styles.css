@@ -445,17 +445,29 @@ small { color: var(--texto-2); font-weight: 400; }
 /* ============ COFRE ============ */
 .mov-mask { letter-spacing: 2px; }
 
-/* ============ MODO TV ============ */
-body.modo-tv .abas,
+/* ============ MODO TV (funciona em todas as abas) ============ */
 body.modo-tv .topo-marca small,
-body.modo-tv .seletor-mes,
 body.modo-tv .btn-sair { display: none !important; }
+/* na apresentação, esconde formulários e áreas de cadastro */
+body.modo-tv .cartao:has(> .formulario),
+body.modo-tv .cartao:has(form),
+body.modo-tv .cartao:has(.upload-area),
+body.modo-tv #config-perfis,
+body.modo-tv .linha-botoes { display: none !important; }
 body.modo-tv .conteudo { max-width: 100%; padding: 24px 40px; }
+body.modo-tv .abas { padding: 12px 40px 0; }
+body.modo-tv .aba { font-size: 1.05rem; padding: 12px 20px; }
 body.modo-tv .card-resumo .valor { font-size: 2.4rem; }
 body.modo-tv .card-resumo .rotulo { font-size: 1rem; }
+body.modo-tv .card-resumo .extra { font-size: .95rem; }
 body.modo-tv .cartao h3 { font-size: 1.3rem; }
 body.modo-tv .legenda-item { font-size: 1rem; }
 body.modo-tv .ultimo-item { font-size: 1.05rem; }
+body.modo-tv .tabela { font-size: 1.05rem; }
+body.modo-tv .prog-info { font-size: .95rem; }
+body.modo-tv .rec-item, body.modo-tv .rapida-item { font-size: 1rem; }
+body.modo-tv .hero-saldo strong { font-size: 2.6rem; }
+body.modo-tv .grade-cartoes { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
 body.modo-tv .topo { padding: 10px 40px; }
 
 /* ============ MERCADO / NOTA FISCAL ============ */
