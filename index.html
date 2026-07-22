@@ -219,9 +219,16 @@
           </div>
         </div>
 
-        <div class="cartao">
-          <h3>Compras por categoria de produto <small id="mercado-mes"></small></h3>
-          <div id="grafico-mercado"></div>
+        <div id="mercado-cards" class="cards-resumo"></div>
+        <div class="grade-graficos">
+          <div class="cartao grafico-cartao">
+            <h3>🍩 Para onde foi o dinheiro <small id="mercado-mes"></small></h3>
+            <div id="mercado-donut" class="area-grafico"></div>
+          </div>
+          <div class="cartao grafico-cartao">
+            <h3>Compras por categoria de produto</h3>
+            <div id="grafico-mercado"></div>
+          </div>
         </div>
 
         <div class="cartao">
@@ -267,6 +274,8 @@
             <div class="campo"><label>Descrição</label><input id="ep-desc" required placeholder="Ex.: Financiamento do carro"></div>
             <div class="campo"><label>Valor total (R$)</label><input id="ep-total" type="number" step="0.01" min="0.01" required></div>
             <div class="campo"><label>Valor já pago (R$)</label><input id="ep-pago" type="number" step="0.01" min="0" value="0" required></div>
+            <div class="campo"><label>Parcelado em quantas vezes?</label><input id="ep-parcelas" type="number" min="1" placeholder="ex.: 48 (opcional)"></div>
+            <div class="campo"><label>Valor da parcela (R$)</label><input id="ep-parcela" type="number" step="0.01" min="0" placeholder="calculado sozinho"></div>
             <div class="campo"><label>Responsável</label><select id="ep-dono"></select></div>
             <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar</button></div>
           </form>
@@ -331,6 +340,20 @@
           <p class="dica">A taxa é buscada automaticamente do Banco Central. Se preferir, digite a taxa que aparece no
             app do seu banco — o valor digitado tem prioridade. Com ela, o site estima quanto cada investimento rende por mês.</p>
         </div>
+        <div class="cartao">
+          <h3>📆 Planos mensais <small>consórcio, título de capitalização, previdência...</small></h3>
+          <p class="dica">Para pagamentos fixos com prazo — ex.: Ourocard BB de R$ 100 por mês em 48 vezes.
+            O site vai somando o que já foi pago e mostra quantas parcelas faltam.</p>
+          <form id="form-plano" class="formulario">
+            <div class="campo"><label>Descrição</label><input id="pl-desc" required placeholder="Ex.: Ourocard Banco do Brasil"></div>
+            <div class="campo"><label>Valor da parcela (R$)</label><input id="pl-parcela" type="number" step="0.01" min="0.01" required placeholder="ex.: 100"></div>
+            <div class="campo"><label>Prazo (total de parcelas)</label><input id="pl-total" type="number" min="1" required placeholder="ex.: 48"></div>
+            <div class="campo"><label>Parcelas já pagas</label><input id="pl-pagas" type="number" min="0" value="0" required></div>
+            <div class="campo"><label>Titular</label><select id="pl-dono"></select></div>
+            <div class="campo campo-botao"><button type="submit" class="btn-principal">Adicionar plano</button></div>
+          </form>
+          <div id="lista-planos" class="grade-cartoes" style="margin-top:14px"></div>
+        </div>
         <div id="resumo-invest" class="cards-resumo"></div>
         <div class="cartao">
           <h3>Carteira</h3>
@@ -343,6 +366,7 @@
 
       <!-- ===== PLANEJAMENTO ===== -->
       <section id="aba-planejamento" class="painel">
+        <div id="plan-dash"></div>
         <div class="cartao">
           <h3>🔒 Cofre do casal <small>valores protegidos por senha</small></h3>
           <p class="dica">Guarde dinheiro aqui e acompanhe o total sem mostrar os números na tela — os valores só aparecem
@@ -406,6 +430,15 @@
             <div class="campo"><label>Observação</label><input id="tb-obs" placeholder="Ex.: aumento, promoção..."></div>
             <div class="campo campo-botao"><button type="submit" class="btn-principal">Salvar registro</button></div>
           </form>
+          <div class="linha-botoes" style="margin-top:12px">
+            <input type="file" id="hl-arquivo" accept="image/*" class="oculto">
+            <button id="btn-holerite" class="btn-secundario" type="button">📷 Ler print do holerite</button>
+            <span class="dica" style="margin:0">o site lê a imagem e preenche bruto, líquido e FGTS sozinho — é só conferir e salvar</span>
+          </div>
+          <div id="hl-status" class="ocr-status oculto">
+            <div class="progresso"><div id="hl-progresso" style="width:0%"></div></div>
+            <p id="hl-texto">Preparando leitura...</p>
+          </div>
         </div>
         <div id="trabalho-cards" class="cards-resumo"></div>
         <div class="cartao grafico-cartao">

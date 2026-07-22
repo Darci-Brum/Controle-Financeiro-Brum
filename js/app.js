@@ -101,6 +101,16 @@ function adicionarExemplosEventos(d) {
   d.exemplosV5 = true;
 }
 
+// Exemplo de plano mensal de investimento (flag demo:true)
+function adicionarExemplosPlanos(d) {
+  if (!d.planosInvest) d.planosInvest = [];
+  d.planosInvest.push(
+    { id: 9191, demo: true, desc: 'Ourocard Banco do Brasil', parcela: 100, totalParcelas: 48, pagas: 6, dono: 'darci' },
+  );
+  d.proximoId = Math.max(d.proximoId || 100, 9200);
+  d.exemplosV6 = true;
+}
+
 // Exemplos (flag demo:true) para mostrar como fica na vida real —
 // removíveis em Configurações → Remover dados de exemplo.
 function adicionarExemplos(d) {
@@ -175,6 +185,8 @@ function carregar() {
       if (!d.recorrentes) d.recorrentes = [];
       if (!d.eventos) d.eventos = [];
       if (!d.exemplosV5) adicionarExemplosEventos(d);
+      if (!d.planosInvest) d.planosInvest = [];
+      if (!d.exemplosV6) adicionarExemplosPlanos(d);
       return d;
     }
   } catch (e) { /* dados corrompidos: recomeça */ }
@@ -182,6 +194,7 @@ function carregar() {
   adicionarExemplos(novo);
   adicionarExemplosTrabalho(novo);
   adicionarExemplosEventos(novo);
+  adicionarExemplosPlanos(novo);
   return novo;
 }
 function salvar() {
@@ -294,7 +307,7 @@ function preencherSelects() {
   // Perfis
   const selFP = $('#filtro-perfil');
   selFP.querySelectorAll('option:not([value="todos"])').forEach((o) => o.remove());
-  const donos = [$('#lc-perfil'), $('#ct-dono'), $('#ep-dono'), $('#cr-dono'), $('#iv-dono'), $('#nf-perfil'), $('#tb-perfil')];
+  const donos = [$('#lc-perfil'), $('#ct-dono'), $('#ep-dono'), $('#cr-dono'), $('#iv-dono'), $('#nf-perfil'), $('#tb-perfil'), $('#pl-dono')];
   donos.forEach((s) => (s.innerHTML = ''));
   const selMeta = $('#mt-dono');
   selMeta.querySelectorAll('option:not([value="casal"])').forEach((o) => o.remove());
@@ -777,7 +790,9 @@ function configurarFormLancamento() {
   $('#btn-lanc-cancelar').addEventListener('click', resetFormLanc);
 
   $('#lc-pag').addEventListener('change', () => {
-    $('#campo-cartao').classList.toggle('oculto', $('#lc-pag').value !== 'Cartão de crédito');
+    const ehCartao = $('#lc-pag').value === 'Cartão de crédito';
+    $('#campo-cartao').classList.toggle('oculto', !ehCartao);
+    $('#lc-cartao').required = ehCartao;
   });
 
   $('#form-lancamento').addEventListener('submit', (e) => {
@@ -791,7 +806,13 @@ function configurarFormLancamento() {
       perfil: $('#lc-perfil').value,
       pag: $('#lc-pag').value,
     };
-    if ($('#lc-pag').value === 'Cartão de crédito' && $('#lc-cartao').value) l.cartaoId = +$('#lc-cartao').value;
+    if ($('#lc-pag').value === 'Cartão de crédito') {
+      if (!$('#lc-cartao').value) {
+        alert('Escolha em qual cartão a compra foi passada. 💳\nSe ainda não cadastrou o cartão, adicione primeiro na aba Cartões.');
+        return;
+      }
+      l.cartaoId = +$('#lc-cartao').value; // a compra entra na fatura e abate o limite desse cartão
+    }
 
     if (editandoLancId !== null) {
       const i = dados.lancamentos.findIndex((x) => x.id === editandoLancId);
@@ -877,6 +898,50 @@ function statusCartao(restantePct) {
   if (restantePct <= 70) return { cls: 'st-azul', selo: '🔵 Uso moderado', cor: '#2a78d6' };
   return { cls: 'st-verde', selo: '🟢 Limite tranquilo', cor: '#0ca30c' };
 }
+// Identidade visual do banco a partir do nome do cartão (cores oficiais das marcas)
+const MARCAS_BANCOS = [
+  { re: /NUBANK|\bNU\b/, cor: '#820ad1', txtCor: '#fff', txt: 'Nu' },
+  { re: /ITAU/, cor: '#ec7000', txtCor: '#fff', txt: 'Itaú' },
+  { re: /SANTANDER/, cor: '#ec0000', txtCor: '#fff', txt: 'S' },
+  { re: /BRADESCO|NEXT/, cor: '#cc092f', txtCor: '#fff', txt: 'B' },
+  { re: /CAIXA|CX/, cor: '#0070af', txtCor: '#f6822a', txt: 'CX' },
+  { re: /BRASIL|OURO ?CARD|\bBB\b/, cor: '#f9dd16', txtCor: '#003da5', txt: 'BB' },
+  { re: /INTER/, cor: '#ff7a00', txtCor: '#fff', txt: 'in' },
+  { re: /\bC6\b/, cor: '#242424', txtCor: '#fff', txt: 'C6' },
+  { re: /NEON/, cor: '#00e5cc', txtCor: '#003641', txt: 'N' },
+  { re: /PICPAY/, cor: '#21c25e', txtCor: '#fff', txt: 'P' },
+  { re: /MERCADO ?PAGO|MELI/, cor: '#00b1ea', txtCor: '#fff', txt: 'MP' },
+  { re: /SICREDI/, cor: '#64a70b', txtCor: '#fff', txt: 'S' },
+  { re: /SICOOB/, cor: '#003641', txtCor: '#7fbc03', txt: 'S' },
+  { re: /BANRISUL/, cor: '#0066b3', txtCor: '#fff', txt: 'BR' },
+  { re: /WILL/, cor: '#ffd900', txtCor: '#242424', txt: 'will' },
+  { re: /\bPAN\b/, cor: '#00c1d5', txtCor: '#003641', txt: 'PAN' },
+  { re: /SAFRA/, cor: '#06226e', txtCor: '#fff', txt: 'SF' },
+];
+function badgeBanco(nome) {
+  const n = normalizarTexto(nome);
+  const m = MARCAS_BANCOS.find((b) => b.re.test(n));
+  if (m) return `<span class="banco-badge" style="background:${m.cor};color:${m.txtCor}">${m.txt}</span>`;
+  const iniciais = nome.trim().slice(0, 2).toUpperCase();
+  return `<span class="banco-badge" style="background:var(--acento);color:#fff">${escapar(iniciais)}</span>`;
+}
+function bandeiraHtml(b) {
+  switch (String(b || '').toLowerCase()) {
+    case 'mastercard':
+      return '<span class="bandeira-svg" title="Mastercard"><svg width="36" height="24" viewBox="0 0 36 24"><circle cx="14" cy="12" r="9" fill="#eb001b"/><circle cx="22" cy="12" r="9" fill="#f79e1b" fill-opacity=".88"/></svg></span>';
+    case 'visa':
+      return '<span class="bandeira-svg" title="Visa"><svg width="42" height="24" viewBox="0 0 42 24"><rect width="42" height="24" rx="5" fill="#fff" stroke="#e1e0d9"/><text x="21" y="17" text-anchor="middle" font-family="system-ui" font-size="12" font-style="italic" font-weight="800" fill="#1a1f71">VISA</text></svg></span>';
+    case 'elo':
+      return '<span class="bandeira-svg" title="Elo"><svg width="38" height="24" viewBox="0 0 38 24"><rect width="38" height="24" rx="5" fill="#242424"/><circle cx="11" cy="12" r="4.5" fill="#ffcb05"/><circle cx="19" cy="12" r="4.5" fill="#00a4e0"/><circle cx="27" cy="12" r="4.5" fill="#ef4123"/></svg></span>';
+    case 'hipercard':
+      return '<span class="bandeira-svg" title="Hipercard"><svg width="56" height="24" viewBox="0 0 56 24"><rect width="56" height="24" rx="6" fill="#b3131b"/><text x="28" y="16" text-anchor="middle" font-family="system-ui" font-size="9.5" font-weight="800" font-style="italic" fill="#fff">Hipercard</text></svg></span>';
+    case 'amex':
+      return '<span class="bandeira-svg" title="American Express"><svg width="36" height="24" viewBox="0 0 36 24"><rect width="36" height="24" rx="4" fill="#2e77bc"/><text x="18" y="16" text-anchor="middle" font-family="system-ui" font-size="9" font-weight="800" fill="#fff">AMEX</text></svg></span>';
+    default:
+      return `<span class="bandeira">${escapar(b || '')}</span>`;
+  }
+}
+
 function renderCartoes() {
   const alvo = $('#lista-cartoes');
   if (!dados.cartoes.length) { alvo.innerHTML = '<p class="vazio cartao">Nenhum cartão cadastrado ainda. 💳</p>'; }
@@ -889,8 +954,8 @@ function renderCartoes() {
       <div class="cartao cartao-item ${st.cls}">
         <button class="btn-lixo remover" data-id="${c.id}" data-tipo="cartao" title="Excluir">🗑</button>
         <div class="cartao-credito-topo">
-          <strong>💳 ${escapar(c.nome)}</strong>
-          <span class="bandeira">${escapar(c.bandeira)}</span>
+          <span class="nome-cartao">${badgeBanco(c.nome)}<strong>${escapar(c.nome)}</strong></span>
+          ${bandeiraHtml(c.bandeira)}
         </div>
         <small>Titular: ${escapar(primeiroNome(c.dono))} · Fecha dia ${c.fecha} · Vence dia ${c.vence}</small>
         <div class="progresso"><div style="width:${pct}%"></div></div>
@@ -898,11 +963,33 @@ function renderCartoes() {
           <span>Fatura de ${rotuloMes(mesRef)}: <strong>${fmtBRL(gasto)}</strong></span>
           <span>Livre: <strong>${fmtBRL(Math.max(c.limite - gasto, 0))}</strong> (${fmtPct(restantePct)})</span>
         </div>
-        <span class="selo-status">${st.selo}</span>
+        <div class="linha-botoes" style="margin-top:10px; align-items:center">
+          <span class="selo-status">${st.selo}</span>
+          <button class="btn-secundario ver-fatura" data-id="${c.id}">👁 Ver fatura</button>
+        </div>
       </div>`;
   }).join('');
   ligarRemocao(alvo, 'cartoes');
+  alvo.querySelectorAll('.ver-fatura').forEach((b) => b.addEventListener('click', () => modalFatura(+b.dataset.id)));
   renderCalendario();
+}
+
+// Fatura detalhada: todas as compras do mês passadas naquele cartão
+function modalFatura(id) {
+  const c = dados.cartoes.find((x) => x.id == id);
+  if (!c) return;
+  const compras = lancDoMes(mesRef, 'todos')
+    .filter((l) => l.tipo === 'saida' && l.cartaoId == c.id)
+    .sort((a, b) => b.data.localeCompare(a.data));
+  const total = soma(compras);
+  const corpo = compras.map((l) => `
+    <div class="ultimo-item">
+      <div>${escapar(l.desc)}<div class="quem">${fmtData(l.data)} · ${escapar(primeiroNome(l.perfil))} · ${escapar(l.cat)}</div></div>
+      <strong class="val-neg">${fmtBRL(l.valor)}</strong>
+    </div>`).join('') || '<p class="vazio">Nenhuma compra neste cartão no mês selecionado.</p>';
+  abrirModal(`💳 Fatura ${c.nome} — ${rotuloMes(mesRef)}`, corpo + `
+    <p class="dica" style="margin-top:12px">Total da fatura: <strong>${fmtBRL(total)}</strong> ·
+    Limite: ${fmtBRL(c.limite)} · Livre: <strong>${fmtBRL(Math.max(c.limite - total, 0))}</strong></p>`);
 }
 
 // --- Calendário de fechamento/vencimento das faturas ---
@@ -1007,19 +1094,28 @@ function cartaoDivida(item, icone) {
   const pct = item.total > 0 ? Math.min((item.pago / item.total) * 100, 100) : 0;
   const restante = Math.max(item.total - item.pago, 0);
   const quitado = restante <= 0.005;
+  // Informações de parcelamento (quando cadastradas): recalcula sozinho a cada pagamento
+  let infoParcelas = '';
+  if (item.valorParcela > 0) {
+    const pagasN = Math.min(Math.floor(item.pago / item.valorParcela + 0.001), item.parcelas || Infinity);
+    const faltamN = item.parcelas ? Math.max(item.parcelas - pagasN, 0) : Math.ceil(restante / item.valorParcela);
+    infoParcelas = `<br><small>Parcela: <strong>${fmtBRL(item.valorParcela)}</strong>
+      ${item.parcelas ? ` · ${pagasN} de ${item.parcelas} pagas` : ''} · faltam <strong>${faltamN}</strong> parcelas</small>`;
+  }
   return `
     <div class="cartao cartao-item ${quitado ? 'st-verde' : ''}">
       <button class="btn-lixo remover" data-id="${item.id}" title="Excluir">🗑</button>
       <strong>${icone} ${escapar(item.desc)}</strong><br>
-      <small>Responsável: ${escapar(primeiroNome(item.dono))} · Total: ${fmtBRL(item.total)}</small>
+      <small>Responsável: ${escapar(primeiroNome(item.dono))} · Total: ${fmtBRL(item.total)}</small>${infoParcelas}
       <div class="progresso"><div style="width:${pct}%"></div></div>
       <div class="prog-info">
         <span>Pago: <strong class="val-pos">${fmtBRL(item.pago)}</strong> (${fmtPct(pct)})</span>
         <span>Restante: <strong class="${quitado ? 'val-pos' : 'val-neg'}">${fmtBRL(restante)}</strong></span>
       </div>
       <div class="linha-botoes" style="margin-top:10px">
-        ${quitado ? '<span class="selo-status">✅ Quitado!</span>'
-          : `<button class="btn-secundario btn-pagamento" data-id="${item.id}">＋ Registrar pagamento</button>`}
+        ${quitado ? '<span class="selo-status">✅ Quitado!</span>' : `
+          ${item.valorParcela > 0 ? `<button class="btn-principal btn-parcela" data-id="${item.id}">✓ Pagar parcela (${fmtBRL(Math.min(item.valorParcela, restante))})</button>` : ''}
+          <button class="btn-secundario btn-pagamento" data-id="${item.id}">＋ Outro valor</button>`}
       </div>
     </div>`;
 }
@@ -1031,6 +1127,12 @@ function ligarPagamentos(container, colecao) {
       item.pago = Math.min(+(item.pago + v).toFixed(2), item.total);
       salvar(); renderTudo();
     }
+  }));
+  // paga exatamente uma parcela e recalcula tudo
+  container.querySelectorAll('.btn-parcela').forEach((b) => b.addEventListener('click', () => {
+    const item = dados[colecao].find((x) => x.id == b.dataset.id);
+    item.pago = Math.min(+(item.pago + item.valorParcela).toFixed(2), item.total);
+    salvar(); renderTudo();
   }));
 }
 // Gráfico de avanço: rosca com o % total quitado + barras por item
@@ -1140,14 +1242,50 @@ function valorHoje(inv) {
   return inv.valor * Math.pow(1 + (cdi / 100) * (inv.pctCdi / 100) / 12, meses);
 }
 
+// Planos mensais (consórcio, capitalização, previdência...)
+function renderPlanos() {
+  const alvo = $('#lista-planos');
+  if (!dados.planosInvest.length) { alvo.innerHTML = '<p class="vazio">Nenhum plano mensal ainda.</p>'; return; }
+  alvo.innerHTML = dados.planosInvest.map((p) => {
+    const pago = +(p.parcela * p.pagas).toFixed(2);
+    const totalPlano = +(p.parcela * p.totalParcelas).toFixed(2);
+    const faltam = Math.max(p.totalParcelas - p.pagas, 0);
+    const pct = Math.min((p.pagas / p.totalParcelas) * 100, 100);
+    const completo = faltam === 0;
+    return `
+      <div class="cartao cartao-item ${completo ? 'st-verde' : ''}">
+        <button class="btn-lixo remover" data-id="${p.id}" title="Excluir">🗑</button>
+        <div style="display:flex;align-items:center;gap:10px">${badgeBanco(p.desc)}<strong>📆 ${escapar(p.desc)}</strong></div>
+        <small>Titular: ${escapar(primeiroNome(p.dono))} · ${fmtBRL(p.parcela)}/mês · prazo de ${p.totalParcelas} meses (${fmtBRL(totalPlano)})</small>
+        <div class="progresso"><div style="width:${pct}%"></div></div>
+        <div class="prog-info">
+          <span>Pago: <strong class="val-pos">${fmtBRL(pago)}</strong> (${p.pagas}/${p.totalParcelas})</span>
+          <span>Faltam: <strong>${faltam}</strong> parcelas (${fmtBRL(+(faltam * p.parcela).toFixed(2))})</span>
+        </div>
+        <div class="linha-botoes" style="margin-top:10px">
+          ${completo ? '<span class="selo-status">✅ Plano completo!</span>'
+            : `<button class="btn-principal pl-pagar" data-id="${p.id}">✓ Pagar parcela do mês (${fmtBRL(p.parcela)})</button>`}
+        </div>
+      </div>`;
+  }).join('');
+  ligarRemocao(alvo, 'planosInvest');
+  alvo.querySelectorAll('.pl-pagar').forEach((b) => b.addEventListener('click', () => {
+    const p = dados.planosInvest.find((x) => x.id == b.dataset.id);
+    if (p.pagas < p.totalParcelas) { p.pagas++; salvar(); renderTudo(); }
+  }));
+}
+
 function renderInvestimentos() {
   const lista = dados.investimentos;
   const total = soma(lista);
   const rendaMes = lista.reduce((s, i) => s + (rendimentoMes(i) || 0), 0);
   const carteiraHoje = lista.reduce((s, i) => s + (valorHoje(i) || i.valor), 0);
+  const planosPago = dados.planosInvest.reduce((s, p) => s + p.parcela * p.pagas, 0);
   const porPerfil = dados.perfis.map((p) => ({ p, v: soma(lista.filter((i) => i.dono === p.id)) }));
   $('#resumo-invest').innerHTML = `
     <div class="card-resumo"><div class="rotulo">📈 Total aplicado</div><div class="valor pos">${fmtBRL(total)}</div></div>
+    <div class="card-resumo"><div class="rotulo">📆 Planos mensais (acumulado)</div><div class="valor pos">${planosPago > 0 ? fmtBRL(planosPago) : '—'}</div>
+      <div class="extra">${dados.planosInvest.length ? dados.planosInvest.length + ' plano(s) em andamento' : 'nenhum plano cadastrado'}</div></div>
     <div class="card-resumo"><div class="rotulo">🌱 Carteira hoje ≈</div><div class="valor pos">${carteiraHoje > 0 ? fmtBRL(carteiraHoje) : '—'}</div>
       <div class="extra">${carteiraHoje > total ? '+' + fmtBRL(carteiraHoje - total) + ' de rendimento estimado' : 'corrigido pelo CDI desde cada aporte'}</div></div>
     <div class="card-resumo"><div class="rotulo">💹 Rende ≈ por mês</div><div class="valor pos">${rendaMes > 0 ? fmtBRL(rendaMes) : '—'}</div>
@@ -1180,6 +1318,7 @@ function renderInvestimentos() {
       salvar(); renderTudo();
     }
   }));
+  renderPlanos();
 }
 
 // ==========================================================
@@ -1276,7 +1415,53 @@ function alternarTV() {
 // ==========================================================
 // PLANEJAMENTO (metas + orçamentos)
 // ==========================================================
+// Dashboard do planejamento: cards de resumo + anéis de progresso por meta
+function renderPlanDash() {
+  const alvo = $('#plan-dash');
+  if (!dados.metas.length) { alvo.innerHTML = ''; return; }
+  const alvoTotal = dados.metas.reduce((s, m) => s + m.alvo, 0);
+  const guardado = dados.metas.reduce((s, m) => s + Math.min(m.atual, m.alvo), 0);
+  const pctGeral = alvoTotal > 0 ? (guardado / alvoTotal) * 100 : 0;
+  const concluidas = dados.metas.filter((m) => m.atual >= m.alvo).length;
+  const cores = coresSeries();
+
+  const aneis = dados.metas.map((m, i) => {
+    const pct = Math.min((m.atual / m.alvo) * 100, 100);
+    const r = 42, circ = 2 * Math.PI * r;
+    return `
+      <div class="anel anel-hover" data-nome="${escapar(m.nome)}" data-atual="${m.atual}" data-alvo="${m.alvo}" data-pct="${pct.toFixed(1)}" data-prazo="${m.prazo || ''}">
+        <svg width="110" height="110" viewBox="0 0 110 110" role="img" aria-label="${escapar(m.nome)}: ${Math.round(pct)}%">
+          <circle cx="55" cy="55" r="${r}" fill="none" stroke="var(--grade)" stroke-width="12"/>
+          <circle cx="55" cy="55" r="${r}" fill="none" stroke="${pct >= 100 ? '#0ca30c' : cores[i % 8]}" stroke-width="12"
+            stroke-linecap="round" stroke-dasharray="${(circ * pct / 100).toFixed(1)} ${circ.toFixed(1)}" transform="rotate(-90 55 55)"/>
+          <text x="55" y="61" text-anchor="middle" font-size="19" font-weight="800" fill="var(--texto)">${Math.round(pct)}%</text>
+        </svg>
+        <div class="anel-nome">${pct >= 100 ? '✅ ' : ''}${escapar(m.nome)}</div>
+      </div>`;
+  }).join('');
+
+  alvo.innerHTML = `
+    <div class="cards-resumo" style="margin-bottom:18px">
+      <div class="card-resumo"><div class="rotulo">🎯 Soma das metas</div><div class="valor">${fmtBRL(alvoTotal)}</div>
+        <div class="extra">${dados.metas.length} ${dados.metas.length === 1 ? 'meta' : 'metas'}</div></div>
+      <div class="card-resumo"><div class="rotulo">💰 Já guardado</div><div class="valor pos">${fmtBRL(guardado)}</div>
+        <div class="extra">falta ${fmtBRL(Math.max(alvoTotal - guardado, 0))}</div></div>
+      <div class="card-resumo"><div class="rotulo">📊 Avanço geral</div><div class="valor">${fmtPct(pctGeral)}</div>
+        <div class="extra">${concluidas} concluída${concluidas === 1 ? '' : 's'} 🏁</div></div>
+    </div>
+    <div class="cartao"><h3>🎯 Avanço dos planos</h3><div class="aneis">${aneis}</div></div>`;
+
+  alvo.querySelectorAll('.anel-hover').forEach((el) => {
+    el.addEventListener('mousemove', (ev) => mostrarTooltip(ev, `
+      <strong>${el.dataset.nome}</strong>
+      <div class="tt-linha">${fmtBRL(+el.dataset.atual)} de ${fmtBRL(+el.dataset.alvo)} — ${el.dataset.pct.replace('.', ',')}%</div>
+      ${el.dataset.prazo ? `<div class="tt-linha">Prazo: ${rotuloMes(el.dataset.prazo)}</div>` : ''}`));
+    el.addEventListener('mouseleave', esconderTooltip);
+  });
+}
+
 function renderMetas() {
+  renderPlanDash();
   const alvo = $('#lista-metas');
   if (!dados.metas.length) { alvo.innerHTML = '<p class="vazio cartao">Nenhuma meta ainda. Sonhem juntos! ✨</p>'; return; }
   alvo.innerHTML = dados.metas.map((m) => {
@@ -1427,7 +1612,7 @@ function configurarConfig() {
     URL.revokeObjectURL(a.href);
   });
   $('#btn-limpar-demo').addEventListener('click', () => {
-    ['lancamentos', 'cartoes', 'emprestimos', 'crediarios', 'investimentos', 'metas', 'notas', 'salarios', 'eventos']
+    ['lancamentos', 'cartoes', 'emprestimos', 'crediarios', 'investimentos', 'metas', 'notas', 'salarios', 'eventos', 'planosInvest']
       .forEach((col) => { dados[col] = dados[col].filter((x) => !x.demo); });
     dados.cofre.movs = dados.cofre.movs.filter((m) => !m.demo);
     salvar(); renderTudo();
@@ -1466,15 +1651,32 @@ function configurarForms() {
     salvar(); $('#form-cartao').reset(); preencherSelects(); renderTudo();
   });
 
+  // Valor da parcela calculado sozinho: total ÷ nº de parcelas (editável)
+  const atualizaParcelaEmp = () => {
+    const f = $('#ep-parcela');
+    if (f.dataset.manual) return;
+    const t = parseFloat($('#ep-total').value), n = parseInt($('#ep-parcelas').value);
+    f.value = t > 0 && n > 0 ? (t / n).toFixed(2) : '';
+  };
+  $('#ep-total').addEventListener('input', atualizaParcelaEmp);
+  $('#ep-parcelas').addEventListener('input', atualizaParcelaEmp);
+  $('#ep-parcela').addEventListener('input', () => { $('#ep-parcela').dataset.manual = '1'; });
+
   $('#form-emprestimo').addEventListener('submit', (e) => {
     e.preventDefault();
     const total = parseFloat($('#ep-total').value);
+    const parcelas = parseInt($('#ep-parcelas').value) || null;
+    let valorParcela = parseFloat($('#ep-parcela').value) || null;
+    if (parcelas && !valorParcela) valorParcela = +(total / parcelas).toFixed(2);
     dados.emprestimos.push({
       id: novoId(), desc: $('#ep-desc').value.trim(), total,
       pago: Math.min(parseFloat($('#ep-pago').value) || 0, total),
+      parcelas, valorParcela,
       dono: $('#ep-dono').value,
     });
-    salvar(); $('#form-emprestimo').reset(); renderTudo();
+    salvar(); $('#form-emprestimo').reset();
+    delete $('#ep-parcela').dataset.manual;
+    renderTudo();
   });
 
   $('#form-crediario').addEventListener('submit', (e) => {
@@ -1507,6 +1709,19 @@ function configurarForms() {
       atual: parseFloat($('#mt-atual').value) || 0, prazo: $('#mt-prazo').value, dono: $('#mt-dono').value,
     });
     salvar(); $('#form-meta').reset(); renderTudo();
+  });
+
+  $('#form-plano').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const totalParcelas = +$('#pl-total').value;
+    dados.planosInvest.push({
+      id: novoId(), desc: $('#pl-desc').value.trim(),
+      parcela: parseFloat($('#pl-parcela').value),
+      totalParcelas,
+      pagas: Math.min(+$('#pl-pagas').value || 0, totalParcelas),
+      dono: $('#pl-dono').value,
+    });
+    salvar(); $('#form-plano').reset(); renderTudo();
   });
 }
 
@@ -1710,6 +1925,55 @@ function fecharRevisao() {
 }
 
 // --- Renderização da aba Mercado ---
+// Rosca genérica com tooltip, % na legenda e clique por fatia
+function desenharDonut(seletor, itens, aoClicar) {
+  const alvo = $(seletor);
+  if (!itens.length) { alvo.innerHTML = '<p class="vazio">Sem dados neste mês.</p>'; return; }
+  const cores = coresSeries();
+  let fatias = [...itens];
+  if (fatias.length > 8) {
+    const resto = fatias.slice(7).reduce((s, [, v]) => s + v, 0);
+    fatias = fatias.slice(0, 7);
+    fatias.push(['Outras', resto]);
+  }
+  const total = fatias.reduce((s, [, v]) => s + v, 0);
+  const cx = 130, cy = 130, R = 100, r = 62;
+  const surf = getComputedStyle(document.documentElement).getPropertyValue('--superficie').trim();
+  let ang = -Math.PI / 2, svg = '';
+  fatias.forEach(([cat, val], i) => {
+    const frac = val / total;
+    const a2 = ang + frac * Math.PI * 2 - 0.0001;
+    const grande = frac > 0.5 ? 1 : 0;
+    const p = (a, rad) => `${cx + rad * Math.cos(a)},${cy + rad * Math.sin(a)}`;
+    const cor = i < 7 ? cores[i] : 'var(--serie-outros)';
+    svg += `<path class="marca-hover" d="M ${p(ang, R)} A ${R} ${R} 0 ${grande} 1 ${p(a2, R)} L ${p(a2, r)} A ${r} ${r} 0 ${grande} 0 ${p(ang, r)} Z"
+      fill="${cor}" stroke="${surf}" stroke-width="2" data-cat="${escapar(cat)}" data-val="${val}" data-pct="${(frac * 100).toFixed(1)}"/>`;
+    ang = a2 + 0.0001;
+  });
+  alvo.innerHTML = `
+    <svg viewBox="0 0 260 260" role="img" aria-label="Distribuição por categoria">
+      ${svg}
+      <text x="${cx}" y="${cy - 6}" text-anchor="middle" font-size="13" fill="var(--texto-2)">Total</text>
+      <text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="16" font-weight="700" fill="var(--texto)">${fmtBRL(total)}</text>
+    </svg>
+    <div class="legenda">${fatias.map(([cat, val], i) => `
+      <span class="legenda-item" data-cat="${escapar(cat)}">
+        <span class="legenda-cor" style="background:${i < 7 ? cores[i] : 'var(--serie-outros)'}"></span>
+        ${escapar(cat)} · <strong>${fmtPct((val / total) * 100)}</strong>
+      </span>`).join('')}
+    </div>`;
+  alvo.querySelectorAll('path').forEach((el) => {
+    el.addEventListener('mousemove', (ev) => mostrarTooltip(ev, `
+      <strong>${el.dataset.cat}</strong>
+      <div class="tt-linha">${fmtBRL(+el.dataset.val)} — ${el.dataset.pct.replace('.', ',')}% do total</div>
+      ${aoClicar ? '<div class="tt-linha">Clique para ver os itens</div>' : ''}`));
+    el.addEventListener('mouseleave', esconderTooltip);
+    if (aoClicar) el.addEventListener('click', () => { esconderTooltip(); aoClicar(el.dataset.cat); });
+  });
+  if (aoClicar) alvo.querySelectorAll('.legenda-item').forEach((el) =>
+    el.addEventListener('click', () => aoClicar(el.dataset.cat)));
+}
+
 function renderMercado() {
   const notasMes = dados.notas.filter((n) =>
     n.data.startsWith(mesRef) && (filtroPerfil === 'todos' || n.perfil === filtroPerfil));
@@ -1721,6 +1985,25 @@ function renderMercado() {
   const porCat = {};
   notasMes.forEach((n) => n.itens.forEach((it) => { porCat[it.cat] = (porCat[it.cat] || 0) + it.valor; }));
   const itensCat = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+
+  // Mini-dashboard do mercado: cards + rosca com %
+  const totalMercado = itensCat.reduce((s, [, v]) => s + v, 0);
+  const numItens = notasMes.reduce((s, n) => s + n.itens.length, 0);
+  if (notasMes.length) {
+    $('#mercado-cards').innerHTML = `
+      <div class="card-resumo"><div class="rotulo">🛒 Total no mercado</div><div class="valor neg">${fmtBRL(totalMercado)}</div>
+        <div class="extra">${rotuloMes(mesRef)}</div></div>
+      <div class="card-resumo"><div class="rotulo">🧾 Notas do mês</div><div class="valor">${notasMes.length}</div>
+        <div class="extra">${numItens} itens comprados</div></div>
+      <div class="card-resumo"><div class="rotulo">🏆 Categoria campeã</div><div class="valor" style="font-size:1.1rem">${itensCat[0] ? escapar(itensCat[0][0]) : '—'}</div>
+        <div class="extra">${itensCat[0] ? fmtBRL(itensCat[0][1]) + ' · ' + fmtPct((itensCat[0][1] / totalMercado) * 100) + ' do total' : ''}</div></div>
+      <div class="card-resumo"><div class="rotulo">🎯 Média por compra</div><div class="valor">${fmtBRL(totalMercado / notasMes.length)}</div>
+        <div class="extra">por nota fiscal</div></div>`;
+  } else {
+    $('#mercado-cards').innerHTML = '';
+  }
+  desenharDonut('#mercado-donut', itensCat, (cat) => modalCategoriaProduto(cat, notasMes));
+
   if (!itensCat.length) {
     alvo.innerHTML = '<p class="vazio">Nenhuma nota neste mês. Anexe a primeira! 🧾</p>';
   } else {
@@ -2001,7 +2284,88 @@ function renderGraficoTrabalho() {
   });
 }
 
+// --- Leitura do holerite por foto/print (OCR) ---
+function interpretarHolerite(texto) {
+  const linhas = texto.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const dinheiro = (l) => {
+    const ms = l.match(/\d{1,3}(?:\.\d{3})*,\d{2}/g);
+    return ms ? parseFloat(ms[ms.length - 1].replace(/\./g, '').replace(',', '.')) : null;
+  };
+  const acha = (re, reNao) => {
+    for (const l of linhas) {
+      const L = normalizarTexto(l);
+      if (re.test(L) && !(reNao && reNao.test(L))) {
+        const v = dinheiro(l);
+        if (v > 0) return v;
+      }
+    }
+    return null;
+  };
+  let bruto = acha(/TOTAL DE VENCIMENTOS|TOTAL VENCIMENTOS|SALARIO BRUTO|TOTAL BRUTO|TOTAL PROVENTOS|REMUNERACAO BRUTA/, /BASE|LIQUID/);
+  let liquido = acha(/LIQUIDO A RECEBER|VALOR LIQUIDO|TOTAL LIQUIDO|SALARIO LIQUIDO|LIQUIDO/, /BASE/);
+  const descontos = acha(/TOTAL DE DESCONTOS|TOTAL DESCONTOS/, /BASE/);
+  const fgts = acha(/FGTS/, /BASE/);
+  // completa o que faltar usando bruto = líquido + descontos
+  if (!bruto && liquido && descontos) bruto = +(liquido + descontos).toFixed(2);
+  if (!liquido && bruto && descontos) liquido = +(bruto - descontos).toFixed(2);
+  if (!bruto) bruto = acha(/VENCIMENTOS|PROVENTOS|SALARIO/, /BASE|LIQUID|FAMILIA/);
+  return { bruto, liquido, fgts };
+}
+
+async function lerHolerite(arquivo) {
+  const st = $('#hl-status'), barra = $('#hl-progresso'), txt = $('#hl-texto');
+  st.classList.remove('oculto');
+  barra.style.width = '5%';
+  txt.textContent = 'Abrindo a imagem...';
+  try {
+    const url = URL.createObjectURL(arquivo);
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i); i.onerror = rej; i.src = url;
+    });
+    const imgOcr = redimensionar(img, 1800, 0.9);
+    URL.revokeObjectURL(url);
+    txt.textContent = 'Baixando o leitor (só na primeira vez)...';
+    const Tesseract = await carregarTesseract();
+    const resultado = await Tesseract.recognize(imgOcr, 'por', {
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          barra.style.width = Math.round(10 + m.progress * 88) + '%';
+          txt.textContent = `Lendo o holerite... ${Math.round(m.progress * 100)}% 🔎`;
+        }
+      },
+    });
+    st.classList.add('oculto');
+    const achado = interpretarHolerite(resultado.data.text);
+    if (!achado.bruto && !achado.liquido) {
+      alert('Não consegui identificar os valores nesse print. 😕\nDica: capture o holerite inteiro, de frente e com boa luz — ou digite os valores manualmente.');
+      return;
+    }
+    if (achado.bruto) $('#tb-bruto').value = achado.bruto;
+    if (achado.liquido) $('#tb-liquido').value = achado.liquido;
+    if (achado.fgts) { $('#tb-fgts').value = achado.fgts; $('#tb-fgts').dataset.manual = '1'; }
+    else if (achado.bruto) $('#tb-fgts').value = (achado.bruto * 0.08).toFixed(2);
+    $('#form-trabalho').scrollIntoView({ behavior: 'smooth' });
+    const partes = [
+      achado.bruto && 'bruto ' + fmtBRL(achado.bruto),
+      achado.liquido && 'líquido ' + fmtBRL(achado.liquido),
+      achado.fgts && 'FGTS ' + fmtBRL(achado.fgts),
+    ].filter(Boolean).join(' · ');
+    alert('Li do holerite: ' + partes + '. ✅\nConfira os valores no formulário, escolha quem e o mês, e clique em Salvar registro.');
+  } catch (erro) {
+    st.classList.add('oculto');
+    alert('Não foi possível ler a imagem: ' + erro.message);
+  }
+}
+
 function configurarTrabalho() {
+  // Leitura do holerite por imagem
+  $('#btn-holerite').addEventListener('click', () => $('#hl-arquivo').click());
+  $('#hl-arquivo').addEventListener('change', () => {
+    const f = $('#hl-arquivo').files[0];
+    if (f) { lerHolerite(f); $('#hl-arquivo').value = ''; }
+  });
+
   // FGTS sugerido automaticamente: 8% do bruto (até a pessoa digitar manualmente)
   $('#tb-bruto').addEventListener('input', () => {
     const f = $('#tb-fgts');

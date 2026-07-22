@@ -405,6 +405,23 @@ small { color: var(--texto-2); font-weight: 400; }
 .divida-graf svg { flex: none; }
 .divida-barras { flex: 1; min-width: 240px; }
 .divida-barras .barra-cat { margin-bottom: 10px; }
+/* Badge com a identidade visual do banco */
+.banco-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px; height: 36px; padding: 0 8px;
+  border-radius: 10px; font-weight: 800; font-size: .82rem;
+  letter-spacing: -0.02em; flex: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .18);
+}
+.cartao-credito-topo .nome-cartao { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cartao-credito-topo .nome-cartao strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bandeira-svg { flex: none; display: inline-flex; align-items: center; }
+
+/* Anéis de progresso do planejamento */
+.aneis { display: flex; flex-wrap: wrap; gap: 18px 24px; justify-content: center; }
+.anel { text-align: center; width: 124px; }
+.anel-nome { font-size: .78rem; color: var(--texto-2); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; }
+
 .selo-status {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: .72rem; font-weight: 700; border-radius: 20px;
