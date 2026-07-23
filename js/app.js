@@ -359,6 +359,41 @@ function abrirModal(titulo, corpoHtml) {
 }
 function fecharModal() { $('#modal').classList.add('oculto'); }
 
+// ---------- Editor universal (✏️ em qualquer item, sem apagar e recriar) ----------
+function opcoesPerfis() {
+  return dados.perfis.map((p) => ({ valor: p.id, rotulo: p.nome }));
+}
+function modalEditar(titulo, campos, valores, aoSalvar) {
+  const corpo = campos.map((c) => {
+    const v = valores[c.chave];
+    if (c.tipo === 'select') {
+      return `<div class="campo" style="margin-bottom:10px"><label>${c.rotulo}</label>
+        <select class="ed-campo" data-chave="${c.chave}">${c.opcoes.map((o) =>
+          `<option value="${escapar(o.valor)}" ${String(o.valor) === String(v) ? 'selected' : ''}>${escapar(o.rotulo)}</option>`).join('')}</select></div>`;
+    }
+    const tipo = c.tipo === 'numero' ? 'number' : c.tipo === 'data' ? 'date' : c.tipo === 'mes' ? 'month' : 'text';
+    return `<div class="campo" style="margin-bottom:10px"><label>${c.rotulo}</label>
+      <input class="ed-campo" data-chave="${c.chave}" type="${tipo}"
+        ${tipo === 'number' ? `step="${c.passo || '0.01'}" min="0"` : ''}
+        value="${v === null || v === undefined ? '' : escapar(v)}"></div>`;
+  }).join('');
+  abrirModal('✏️ Editar — ' + titulo, corpo + `
+    <div class="linha-botoes" style="margin-top:14px; justify-content:flex-end">
+      <button id="ed-cancelar" class="btn-secundario" type="button">Cancelar</button>
+      <button id="ed-salvar" class="btn-principal" type="button">💾 Salvar alterações</button>
+    </div>`);
+  $('#ed-cancelar').addEventListener('click', fecharModal);
+  $('#ed-salvar').addEventListener('click', () => {
+    const novos = {};
+    document.querySelectorAll('#modal-corpo .ed-campo').forEach((el) => {
+      const c = campos.find((x) => x.chave === el.dataset.chave);
+      novos[c.chave] = c.tipo === 'numero' ? (parseFloat(el.value) || 0) : el.value;
+    });
+    fecharModal();
+    aoSalvar(novos);
+  });
+}
+
 function modalCategoria(cat) {
   const itens = lancDoMes().filter((l) => l.tipo === 'saida' && l.cat === cat);
   const total = soma(itens);
@@ -871,9 +906,25 @@ function renderRecorrentes() {
       <div class="rec-info">${escapar(r.desc)}
         <small>· ${escapar(r.cat)} · todo dia ${r.dia} · ${escapar(primeiroNome(r.perfil))}${r.ativo ? '' : ' · pausado'}</small></div>
       <strong class="${r.tipo === 'entrada' ? 'val-pos' : 'val-neg'}">${fmtBRL(r.valor)}</strong>
+      <button class="btn-lixo rec-editar" data-id="${r.id}" title="Editar">✏️</button>
       <button class="btn-secundario rec-pausar" data-id="${r.id}">${r.ativo ? '⏸ Pausar' : '▶ Ativar'}</button>
       <button class="btn-lixo rec-remover" data-id="${r.id}" title="Excluir">🗑</button>
     </div>`).join('');
+  alvo.querySelectorAll('.rec-editar').forEach((b) => b.addEventListener('click', () => {
+    const r = dados.recorrentes.find((x) => x.id == b.dataset.id);
+    modalEditar(r.desc, [
+      { chave: 'desc', rotulo: 'Descrição', tipo: 'texto' },
+      { chave: 'valor', rotulo: 'Valor (R$)', tipo: 'numero' },
+      { chave: 'dia', rotulo: 'Dia do mês', tipo: 'numero', passo: '1' },
+      { chave: 'perfil', rotulo: 'Perfil', tipo: 'select', opcoes: opcoesPerfis() },
+    ], r, (n) => {
+      if (n.desc.trim()) r.desc = n.desc.trim();
+      if (n.valor > 0) r.valor = n.valor;
+      if (n.dia >= 1 && n.dia <= 31) r.dia = Math.round(n.dia);
+      r.perfil = n.perfil;
+      salvar(); renderTudo();
+    });
+  }));
   alvo.querySelectorAll('.rec-pausar').forEach((b) => b.addEventListener('click', () => {
     const r = dados.recorrentes.find((x) => x.id == b.dataset.id);
     r.ativo = !r.ativo;
@@ -952,6 +1003,7 @@ function renderCartoes() {
     const st = statusCartao(restantePct);
     return `
       <div class="cartao cartao-item ${st.cls}">
+        <button class="btn-lixo editar-pos editar-cartao" data-id="${c.id}" title="Editar">✏️</button>
         <button class="btn-lixo remover" data-id="${c.id}" data-tipo="cartao" title="Excluir">🗑</button>
         <div class="cartao-credito-topo">
           <span class="nome-cartao">${badgeBanco(c.nome)}<strong>${escapar(c.nome)}</strong></span>
@@ -971,6 +1023,26 @@ function renderCartoes() {
   }).join('');
   ligarRemocao(alvo, 'cartoes');
   alvo.querySelectorAll('.ver-fatura').forEach((b) => b.addEventListener('click', () => modalFatura(+b.dataset.id)));
+  alvo.querySelectorAll('.editar-cartao').forEach((b) => b.addEventListener('click', () => {
+    const c = dados.cartoes.find((x) => x.id == b.dataset.id);
+    modalEditar(c.nome, [
+      { chave: 'nome', rotulo: 'Nome do cartão', tipo: 'texto' },
+      { chave: 'bandeira', rotulo: 'Bandeira', tipo: 'select', opcoes: ['Mastercard', 'Visa', 'Elo', 'Hipercard', 'Amex', 'Outra'].map((x) => ({ valor: x, rotulo: x })) },
+      { chave: 'limite', rotulo: 'Limite (R$)', tipo: 'numero' },
+      { chave: 'fecha', rotulo: 'Dia de fechamento', tipo: 'numero', passo: '1' },
+      { chave: 'vence', rotulo: 'Dia de vencimento', tipo: 'numero', passo: '1' },
+      { chave: 'dono', rotulo: 'Titular', tipo: 'select', opcoes: opcoesPerfis() },
+    ], c, (n) => {
+      if (n.nome.trim()) c.nome = n.nome.trim();
+      c.bandeira = n.bandeira;
+      if (n.limite > 0) c.limite = n.limite;
+      if (n.fecha >= 1 && n.fecha <= 31) c.fecha = Math.round(n.fecha);
+      if (n.vence >= 1 && n.vence <= 31) c.vence = Math.round(n.vence);
+      c.dono = n.dono;
+      delete c.demo;
+      salvar(); preencherSelects(); renderTudo();
+    });
+  }));
   renderCalendario();
 }
 
@@ -1094,30 +1166,61 @@ function cartaoDivida(item, icone) {
   const pct = item.total > 0 ? Math.min((item.pago / item.total) * 100, 100) : 0;
   const restante = Math.max(item.total - item.pago, 0);
   const quitado = restante <= 0.005;
-  // Informações de parcelamento (quando cadastradas): recalcula sozinho a cada pagamento
+  // Informações de parcelamento em etiquetas separadas (leitura mais fácil)
   let infoParcelas = '';
   if (item.valorParcela > 0) {
     const pagasN = Math.min(Math.floor(item.pago / item.valorParcela + 0.001), item.parcelas || Infinity);
     const faltamN = item.parcelas ? Math.max(item.parcelas - pagasN, 0) : Math.ceil(restante / item.valorParcela);
-    infoParcelas = `<br><small>Parcela: <strong>${fmtBRL(item.valorParcela)}</strong>
-      ${item.parcelas ? ` · ${pagasN} de ${item.parcelas} pagas` : ''} · faltam <strong>${faltamN}</strong> parcelas</small>`;
+    infoParcelas = `
+      <div class="chips-divida">
+        <span class="chip-cat">💵 Parcela ${fmtBRL(item.valorParcela)}</span>
+        ${item.parcelas ? `<span class="chip-cat">✔ ${pagasN} de ${item.parcelas} pagas</span>` : ''}
+        <span class="chip-cat">⏳ faltam ${faltamN}</span>
+      </div>`;
   }
   return `
     <div class="cartao cartao-item ${quitado ? 'st-verde' : ''}">
+      <button class="btn-lixo editar-pos editar-divida" data-id="${item.id}" title="Editar">✏️</button>
       <button class="btn-lixo remover" data-id="${item.id}" title="Excluir">🗑</button>
       <strong>${icone} ${escapar(item.desc)}</strong><br>
-      <small>Responsável: ${escapar(primeiroNome(item.dono))} · Total: ${fmtBRL(item.total)}</small>${infoParcelas}
-      <div class="progresso"><div style="width:${pct}%"></div></div>
-      <div class="prog-info">
-        <span>Pago: <strong class="val-pos">${fmtBRL(item.pago)}</strong> (${fmtPct(pct)})</span>
-        <span>Restante: <strong class="${quitado ? 'val-pos' : 'val-neg'}">${fmtBRL(restante)}</strong></span>
+      <small>Responsável: ${escapar(primeiroNome(item.dono))}</small>
+      ${infoParcelas}
+      <div class="progresso" style="margin-top:10px"><div style="width:${pct}%"></div></div>
+      <div class="divida-grid">
+        <div><small>Pago</small><strong class="val-pos">${fmtBRL(item.pago)}</strong><small>${fmtPct(pct)}</small></div>
+        <div><small>Restante</small><strong class="${quitado ? 'val-pos' : 'val-neg'}">${fmtBRL(restante)}</strong><small>${fmtPct(100 - pct)}</small></div>
+        <div><small>Total</small><strong>${fmtBRL(item.total)}</strong><small>&nbsp;</small></div>
       </div>
-      <div class="linha-botoes" style="margin-top:10px">
+      <div class="linha-botoes" style="margin-top:12px">
         ${quitado ? '<span class="selo-status">✅ Quitado!</span>' : `
           ${item.valorParcela > 0 ? `<button class="btn-principal btn-parcela" data-id="${item.id}">✓ Pagar parcela (${fmtBRL(Math.min(item.valorParcela, restante))})</button>` : ''}
           <button class="btn-secundario btn-pagamento" data-id="${item.id}">＋ Outro valor</button>`}
       </div>
     </div>`;
+}
+
+// Editor de empréstimos e contas/crediário
+function ligarEdicaoDivida(container, colecao) {
+  container.querySelectorAll('.editar-divida').forEach((b) => b.addEventListener('click', () => {
+    const item = dados[colecao].find((x) => x.id == b.dataset.id);
+    modalEditar(item.desc, [
+      { chave: 'desc', rotulo: 'Descrição', tipo: 'texto' },
+      { chave: 'total', rotulo: 'Valor total (R$)', tipo: 'numero' },
+      { chave: 'pago', rotulo: 'Valor já pago (R$)', tipo: 'numero' },
+      { chave: 'parcelas', rotulo: 'Nº de parcelas (opcional)', tipo: 'numero', passo: '1' },
+      { chave: 'valorParcela', rotulo: 'Valor da parcela (R$, opcional)', tipo: 'numero' },
+      { chave: 'dono', rotulo: 'Responsável', tipo: 'select', opcoes: opcoesPerfis() },
+    ], item, (n) => {
+      if (n.desc.trim()) item.desc = n.desc.trim();
+      if (n.total > 0) item.total = n.total;
+      item.pago = Math.min(Math.max(n.pago, 0), item.total);
+      item.parcelas = n.parcelas > 0 ? Math.round(n.parcelas) : null;
+      item.valorParcela = n.valorParcela > 0 ? n.valorParcela : null;
+      item.dono = n.dono;
+      delete item.demo;
+      salvar(); renderTudo();
+    });
+  }));
 }
 function ligarPagamentos(container, colecao) {
   container.querySelectorAll('.btn-pagamento').forEach((b) => b.addEventListener('click', () => {
@@ -1156,10 +1259,19 @@ function renderGraficoDividas(alvoSel, lista) {
 
   const barras = lista.map((item, i) => {
     const pct = item.total > 0 ? Math.min((item.pago / item.total) * 100, 100) : 0;
+    const restante = Math.max(item.total - item.pago, 0);
     return `
-      <div class="barra-cat divida-hover" data-desc="${escapar(item.desc)}" data-pago="${item.pago}" data-resta="${Math.max(item.total - item.pago, 0)}" data-pct="${pct.toFixed(1)}">
-        <div class="prog-info"><span>${escapar(item.desc)}</span><span><strong>${fmtPct(pct)}</strong> pago</span></div>
+      <div class="divida-linha divida-hover" data-desc="${escapar(item.desc)}" data-pago="${item.pago}" data-resta="${restante}" data-pct="${pct.toFixed(1)}">
+        <div class="divida-cab">
+          <span class="divida-nome">${escapar(item.desc)} <small>· ${escapar(primeiroNome(item.dono))}</small></span>
+          <span class="divida-pct" style="color:${cores[i % 8]}">${fmtPct(pct)} pago</span>
+        </div>
         <div class="progresso"><div style="width:${pct}%; background:${cores[i % 8]}"></div></div>
+        <div class="divida-vals">
+          <span>Pago: <strong class="val-pos">${fmtBRL(item.pago)}</strong></span>
+          <span>Falta: <strong class="val-neg">${fmtBRL(restante)}</strong></span>
+          <span>Total: <strong>${fmtBRL(item.total)}</strong></span>
+        </div>
       </div>`;
   }).join('');
 
@@ -1171,9 +1283,12 @@ function renderGraficoDividas(alvoSel, lista) {
         <text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="20" font-weight="700" fill="var(--texto)">${fmtPct(pctGeral)}</text>
         <text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="10" fill="var(--texto-2)">quitado</text>
       </svg>
-      <div class="divida-barras">${barras}
-        <p class="dica" style="margin-top:6px">Pago: <strong>${fmtBRL(pagoGeral)}</strong> · Restante: <strong>${fmtBRL(totalGeral - pagoGeral)}</strong> de ${fmtBRL(totalGeral)}</p>
-      </div>
+      <div class="divida-barras">${barras}</div>
+    </div>
+    <div class="divida-resumo">
+      <div><small>💚 Pago</small><strong class="val-pos">${fmtBRL(pagoGeral)}</strong></div>
+      <div><small>⏳ Restante</small><strong class="val-neg">${fmtBRL(totalGeral - pagoGeral)}</strong></div>
+      <div><small>📊 Total das dívidas</small><strong>${fmtBRL(totalGeral)}</strong></div>
     </div>`;
 
   alvo.querySelectorAll('.divida-hover').forEach((el) => {
@@ -1192,6 +1307,7 @@ function renderEmprestimos() {
     : '<p class="vazio cartao">Nenhum empréstimo cadastrado. Que continue assim! 🎉</p>';
   ligarRemocao(alvo, 'emprestimos');
   ligarPagamentos(alvo, 'emprestimos');
+  ligarEdicaoDivida(alvo, 'emprestimos');
   renderGraficoDividas('#grafico-emprestimos', dados.emprestimos);
 }
 function renderCrediarios() {
@@ -1201,6 +1317,7 @@ function renderCrediarios() {
     : '<p class="vazio cartao">Nenhuma conta ou crediário cadastrado.</p>';
   ligarRemocao(alvo, 'crediarios');
   ligarPagamentos(alvo, 'crediarios');
+  ligarEdicaoDivida(alvo, 'crediarios');
   renderGraficoDividas('#grafico-crediarios', dados.crediarios);
 }
 
@@ -1254,6 +1371,7 @@ function renderPlanos() {
     const completo = faltam === 0;
     return `
       <div class="cartao cartao-item ${completo ? 'st-verde' : ''}">
+        <button class="btn-lixo editar-pos editar-plano" data-id="${p.id}" title="Editar">✏️</button>
         <button class="btn-lixo remover" data-id="${p.id}" title="Excluir">🗑</button>
         <div style="display:flex;align-items:center;gap:10px">${badgeBanco(p.desc)}<strong>📆 ${escapar(p.desc)}</strong></div>
         <small>Titular: ${escapar(primeiroNome(p.dono))} · ${fmtBRL(p.parcela)}/mês · prazo de ${p.totalParcelas} meses (${fmtBRL(totalPlano)})</small>
@@ -1272,6 +1390,24 @@ function renderPlanos() {
   alvo.querySelectorAll('.pl-pagar').forEach((b) => b.addEventListener('click', () => {
     const p = dados.planosInvest.find((x) => x.id == b.dataset.id);
     if (p.pagas < p.totalParcelas) { p.pagas++; salvar(); renderTudo(); }
+  }));
+  alvo.querySelectorAll('.editar-plano').forEach((b) => b.addEventListener('click', () => {
+    const p = dados.planosInvest.find((x) => x.id == b.dataset.id);
+    modalEditar(p.desc, [
+      { chave: 'desc', rotulo: 'Descrição', tipo: 'texto' },
+      { chave: 'parcela', rotulo: 'Valor da parcela (R$)', tipo: 'numero' },
+      { chave: 'totalParcelas', rotulo: 'Prazo (total de parcelas)', tipo: 'numero', passo: '1' },
+      { chave: 'pagas', rotulo: 'Parcelas já pagas', tipo: 'numero', passo: '1' },
+      { chave: 'dono', rotulo: 'Titular', tipo: 'select', opcoes: opcoesPerfis() },
+    ], p, (n) => {
+      if (n.desc.trim()) p.desc = n.desc.trim();
+      if (n.parcela > 0) p.parcela = n.parcela;
+      if (n.totalParcelas > 0) p.totalParcelas = Math.round(n.totalParcelas);
+      p.pagas = Math.min(Math.max(Math.round(n.pagas), 0), p.totalParcelas);
+      p.dono = n.dono;
+      delete p.demo;
+      salvar(); renderTudo();
+    });
   }));
 }
 
@@ -1309,14 +1445,37 @@ function renderInvestimentos() {
       <td class="dir val-pos">${rm ? fmtBRL(rm) : '—'}</td>
       <td class="dir">${fmtBRL(i.valor)}</td>
       <td class="dir val-pos">${vh ? fmtBRL(vh) : '—'}</td>
-      <td><button class="btn-lixo" data-id="${i.id}" title="Excluir">🗑</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn-lixo ed-inv" data-id="${i.id}" title="Editar">✏️</button>
+        <button class="btn-lixo rm-inv" data-id="${i.id}" title="Excluir">🗑</button>
+      </td>
     </tr>`;
   }).join('') || '<tr><td colspan="9" class="vazio">Nenhum investimento ainda. Comece hoje! 🌱</td></tr>';
-  corpo.querySelectorAll('.btn-lixo').forEach((b) => b.addEventListener('click', () => {
+  corpo.querySelectorAll('.rm-inv').forEach((b) => b.addEventListener('click', () => {
     if (confirm('Excluir este investimento?')) {
       dados.investimentos = dados.investimentos.filter((i) => i.id != b.dataset.id);
       salvar(); renderTudo();
     }
+  }));
+  corpo.querySelectorAll('.ed-inv').forEach((b) => b.addEventListener('click', () => {
+    const i = dados.investimentos.find((x) => x.id == b.dataset.id);
+    modalEditar(i.desc, [
+      { chave: 'desc', rotulo: 'Descrição', tipo: 'texto' },
+      { chave: 'tipo', rotulo: 'Tipo', tipo: 'select', opcoes: ['Poupança', 'CDB / Renda fixa', 'Tesouro Direto', 'Ações', 'Fundos', 'FIIs', 'Cripto', 'Outro'].map((x) => ({ valor: x, rotulo: x })) },
+      { chave: 'valor', rotulo: 'Valor aplicado (R$)', tipo: 'numero' },
+      { chave: 'pctCdi', rotulo: '% do CDI', tipo: 'numero', passo: '0.1' },
+      { chave: 'data', rotulo: 'Data', tipo: 'data' },
+      { chave: 'dono', rotulo: 'Titular', tipo: 'select', opcoes: opcoesPerfis() },
+    ], i, (n) => {
+      if (n.desc.trim()) i.desc = n.desc.trim();
+      i.tipo = n.tipo;
+      if (n.valor > 0) i.valor = n.valor;
+      i.pctCdi = n.pctCdi > 0 ? n.pctCdi : null;
+      if (n.data) i.data = n.data;
+      i.dono = n.dono;
+      delete i.demo;
+      salvar(); renderTudo();
+    });
   }));
   renderPlanos();
 }
@@ -1468,6 +1627,7 @@ function renderMetas() {
     const pct = Math.min((m.atual / m.alvo) * 100, 100);
     return `
       <div class="cartao cartao-item">
+        <button class="btn-lixo editar-pos editar-meta" data-id="${m.id}" title="Editar">✏️</button>
         <button class="btn-lixo remover" data-id="${m.id}" title="Excluir">🗑</button>
         <strong>🎯 ${escapar(m.nome)}</strong><br>
         <small>${m.dono === 'casal' ? '👫 Meta do casal' : 'Meta de ' + escapar(primeiroNome(m.dono))}${m.prazo ? ' · até ' + rotuloMes(m.prazo) : ''}</small>
@@ -1486,6 +1646,24 @@ function renderMetas() {
     const m = dados.metas.find((x) => x.id == b.dataset.id);
     const v = parseFloat((prompt('Quanto deseja guardar para "' + m.nome + '"? (R$)') || '').replace(',', '.'));
     if (v > 0) { m.atual += v; salvar(); renderTudo(); }
+  }));
+  alvo.querySelectorAll('.editar-meta').forEach((b) => b.addEventListener('click', () => {
+    const m = dados.metas.find((x) => x.id == b.dataset.id);
+    modalEditar(m.nome, [
+      { chave: 'nome', rotulo: 'Objetivo', tipo: 'texto' },
+      { chave: 'alvo', rotulo: 'Valor da meta (R$)', tipo: 'numero' },
+      { chave: 'atual', rotulo: 'Já guardado (R$)', tipo: 'numero' },
+      { chave: 'prazo', rotulo: 'Prazo', tipo: 'mes' },
+      { chave: 'dono', rotulo: 'De quem é a meta', tipo: 'select', opcoes: [{ valor: 'casal', rotulo: '👫 Do casal' }, ...opcoesPerfis()] },
+    ], m, (n) => {
+      if (n.nome.trim()) m.nome = n.nome.trim();
+      if (n.alvo > 0) m.alvo = n.alvo;
+      m.atual = Math.max(n.atual, 0);
+      m.prazo = n.prazo;
+      m.dono = n.dono;
+      delete m.demo;
+      salvar(); renderTudo();
+    });
   }));
 }
 
@@ -2036,6 +2214,7 @@ function renderMercado() {
     const cats = [...new Set(n.itens.map((it) => it.cat))].slice(0, 4);
     return `
       <div class="cartao cartao-item">
+        <button class="btn-lixo editar-pos editar-nota" data-id="${n.id}" title="Editar">✏️</button>
         <button class="btn-lixo remover" data-id="${n.id}" title="Excluir nota">🗑</button>
         <strong>🧾 ${escapar(n.mercado)}</strong><br>
         <small>${fmtData(n.data)} · ${escapar(primeiroNome(n.perfil))} · ${n.itens.length} itens</small>
@@ -2049,6 +2228,25 @@ function renderMercado() {
   }).join('') : '<p class="vazio cartao">Nenhuma nota salva ainda.</p>';
 
   lista.querySelectorAll('.ver-nota').forEach((b) => b.addEventListener('click', () => modalNota(+b.dataset.id)));
+  lista.querySelectorAll('.editar-nota').forEach((b) => b.addEventListener('click', () => {
+    const n = dados.notas.find((x) => x.id == b.dataset.id);
+    modalEditar('Nota ' + n.mercado, [
+      { chave: 'mercado', rotulo: 'Mercado', tipo: 'texto' },
+      { chave: 'data', rotulo: 'Data da compra', tipo: 'data' },
+      { chave: 'perfil', rotulo: 'Quem comprou', tipo: 'select', opcoes: opcoesPerfis() },
+      { chave: 'total', rotulo: 'Valor total (R$)', tipo: 'numero' },
+    ], n, (nv) => {
+      if (nv.mercado.trim()) n.mercado = nv.mercado.trim();
+      if (nv.data) n.data = nv.data;
+      n.perfil = nv.perfil;
+      if (nv.total > 0) n.total = +nv.total.toFixed(2);
+      delete n.demo;
+      // mantém o lançamento correspondente em dia com a nota
+      const lanc = dados.lancamentos.find((l) => l.id === n.lancId);
+      if (lanc) { lanc.desc = '🛒 ' + n.mercado; lanc.data = n.data; lanc.perfil = n.perfil; lanc.valor = n.total; }
+      salvar(); renderTudo();
+    });
+  }));
   lista.querySelectorAll('.nota-thumb').forEach((im) => im.addEventListener('click', () => {
     const n = dados.notas.find((x) => x.id == im.dataset.id);
     abrirModal('🧾 ' + n.mercado + ' — ' + fmtData(n.data), `<img class="img-modal" src="${n.img}" alt="Nota fiscal">`);
@@ -2194,7 +2392,10 @@ function renderTrabalho() {
         <td class="dir">${fmtBRL(s.fgts || 0)}</td>
         <td>${variacao}</td>
         <td>${escapar(s.obs || '')}</td>
-        <td><button class="btn-lixo" data-id="${s.id}" title="Excluir">🗑</button></td>
+        <td style="white-space:nowrap">
+          <button class="btn-lixo ed-sal" data-id="${s.id}" title="Editar">✏️</button>
+          <button class="btn-lixo rm-sal" data-id="${s.id}" title="Excluir">🗑</button>
+        </td>
       </tr>`;
   }).join('') || '<tr><td colspan="10" class="vazio">Nenhum salário registrado ainda.</td></tr>';
 
@@ -2202,11 +2403,34 @@ function renderTrabalho() {
   $('#trabalho-resumo').textContent = lista.length
     ? `${lista.length} registros · FGTS do casal somado: ${fmtBRL(fgtsTotal)}` : '';
 
-  corpo.querySelectorAll('.btn-lixo').forEach((b) => b.addEventListener('click', () => {
+  corpo.querySelectorAll('.rm-sal').forEach((b) => b.addEventListener('click', () => {
     if (confirm('Excluir este registro de salário?')) {
       dados.salarios = dados.salarios.filter((s) => s.id != b.dataset.id);
       salvar(); renderTudo();
     }
+  }));
+  corpo.querySelectorAll('.ed-sal').forEach((b) => b.addEventListener('click', () => {
+    const s = dados.salarios.find((x) => x.id == b.dataset.id);
+    modalEditar(`${TIPOS_TRAB[s.tipo]} de ${primeiroNome(s.perfil)} — ${rotuloMes(s.mes)}`, [
+      { chave: 'perfil', rotulo: 'Quem', tipo: 'select', opcoes: opcoesPerfis() },
+      { chave: 'tipo', rotulo: 'Tipo de recebimento', tipo: 'select', opcoes: Object.entries(TIPOS_TRAB).map(([v, r]) => ({ valor: v, rotulo: r })) },
+      { chave: 'mes', rotulo: 'Mês de referência', tipo: 'mes' },
+      { chave: 'bruto', rotulo: 'Valor bruto (R$)', tipo: 'numero' },
+      { chave: 'liquido', rotulo: 'Valor líquido (R$)', tipo: 'numero' },
+      { chave: 'fgts', rotulo: 'FGTS (R$)', tipo: 'numero' },
+      { chave: 'obs', rotulo: 'Observação', tipo: 'texto' },
+    ], s, (n) => {
+      if (n.liquido > n.bruto) { alert('O líquido não pode ser maior que o bruto — nada foi alterado.'); return; }
+      s.perfil = n.perfil;
+      s.tipo = n.tipo;
+      if (n.mes) s.mes = n.mes;
+      if (n.bruto > 0) s.bruto = n.bruto;
+      if (n.liquido > 0) s.liquido = n.liquido;
+      s.fgts = Math.max(n.fgts, 0);
+      s.obs = n.obs.trim();
+      delete s.demo;
+      salvar(); renderTudo();
+    });
   }));
 }
 

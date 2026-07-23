@@ -401,10 +401,36 @@ small { color: var(--texto-2); font-weight: 400; }
 .rapida-titulo:first-child { margin-top: 0; }
 
 /* ============ GRÁFICO DE DÍVIDAS ============ */
-.divida-graf { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+.divida-graf { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
 .divida-graf svg { flex: none; }
-.divida-barras { flex: 1; min-width: 240px; }
-.divida-barras .barra-cat { margin-bottom: 10px; }
+.divida-barras { flex: 1; min-width: 260px; }
+.divida-linha { padding: 10px 0; border-bottom: 1px solid var(--grade); }
+.divida-linha:last-child { border-bottom: none; }
+.divida-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+.divida-nome { font-weight: 600; font-size: .9rem; }
+.divida-nome small { font-weight: 400; }
+.divida-pct { font-weight: 700; font-size: .85rem; white-space: nowrap; }
+.divida-vals { display: flex; gap: 18px; flex-wrap: wrap; font-size: .78rem; color: var(--texto-2); margin-top: 6px; }
+.divida-resumo {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--grade);
+}
+.divida-resumo > div {
+  flex: 1; min-width: 130px; text-align: center;
+  background: var(--superficie-2); border-radius: 12px; padding: 10px 8px;
+}
+.divida-resumo small { display: block; font-size: .72rem; color: var(--texto-2); margin-bottom: 4px; }
+.divida-resumo strong { font-size: 1.05rem; }
+
+/* Grade Pago/Restante/Total dentro dos cards de dívida */
+.divida-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.divida-grid > div { background: var(--superficie-2); border-radius: 10px; padding: 8px 6px; text-align: center; }
+.divida-grid small { display: block; font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--texto-mudo); }
+.divida-grid strong { display: block; font-size: .92rem; margin: 3px 0 1px; white-space: nowrap; }
+.chips-divida { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* Botão editar ao lado do excluir nos cards */
+.cartao-item .editar-pos { position: absolute; top: 12px; right: 42px; }
 /* Badge com a identidade visual do banco */
 .banco-badge {
   display: inline-flex; align-items: center; justify-content: center;
